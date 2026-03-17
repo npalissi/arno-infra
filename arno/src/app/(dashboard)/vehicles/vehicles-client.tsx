@@ -2,8 +2,11 @@
 
 import { useState, useMemo, useEffect, useTransition } from "react";
 import Link from "next/link";
-import { Plus, Search, Car, LayoutGrid, List, TrendingUp, X, ChevronDown } from "lucide-react";
+import { Plus, Search, Car, LayoutGrid, List, TrendingUp, X, ChevronDown, SlidersHorizontal, ArrowUpDown } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import {
   Select,
   SelectContent,
@@ -49,6 +52,14 @@ export function VehiclesClient({ vehicles }: VehiclesClientProps) {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [mounted, setMounted] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [minPrice, setMinPrice] = useState("");
+  const [maxPrice, setMaxPrice] = useState("");
+  const [minYear, setMinYear] = useState("");
+  const [maxYear, setMaxYear] = useState("");
+  const [fuelFilter, setFuelFilter] = useState("all");
+  const [sortBy, setSortBy] = useState<"date" | "price" | "days" | "margin">("date");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [isPending, startTransition] = useTransition();
   const { success: toastSuccess, error: toastError } = useToast();
 
@@ -89,8 +100,29 @@ export function VehiclesClient({ vehicles }: VehiclesClientProps) {
     [vehicles],
   );
 
+  const fuelOptions = useMemo(
+    () => ["all", ...Array.from(new Set(vehicles.map((v) => v.fuel_type))).sort()],
+    [vehicles],
+  );
+
+  const activeAdvancedCount = useMemo(() => {
+    let count = 0;
+    if (minPrice) count++;
+    if (maxPrice) count++;
+    if (minYear) count++;
+    if (maxYear) count++;
+    if (fuelFilter !== "all") count++;
+    if (sortBy !== "date") count++;
+    return count;
+  }, [minPrice, maxPrice, minYear, maxYear, fuelFilter, sortBy]);
+
   const filteredVehicles = useMemo(() => {
-    return vehicles.filter((v) => {
+    const minP = minPrice ? parseFloat(minPrice) * 100 : null;
+    const maxP = maxPrice ? parseFloat(maxPrice) * 100 : null;
+    const minY = minYear ? parseInt(minYear) : null;
+    const maxY = maxYear ? parseInt(maxYear) : null;
+
+    let result = vehicles.filter((v) => {
       const matchesSearch =
         search === "" ||
         `${v.brand} ${v.model} ${v.sub_type ?? ""}`
@@ -100,9 +132,41 @@ export function VehiclesClient({ vehicles }: VehiclesClientProps) {
         statusFilter === "all" || v.status === statusFilter;
       const matchesBrand =
         brandFilter === "Toutes les marques" || v.brand === brandFilter;
-      return matchesSearch && matchesStatus && matchesBrand;
+      const matchesFuel = fuelFilter === "all" || v.fuel_type === fuelFilter;
+      const matchesMinPrice = minP === null || v.purchase_price >= minP;
+      const matchesMaxPrice = maxP === null || v.purchase_price <= maxP;
+      const matchesMinYear = minY === null || v.year >= minY;
+      const matchesMaxYear = maxY === null || v.year <= maxY;
+      return matchesSearch && matchesStatus && matchesBrand && matchesFuel && matchesMinPrice && matchesMaxPrice && matchesMinYear && matchesMaxYear;
     });
-  }, [vehicles, search, statusFilter, brandFilter]);
+
+    // Sort
+    result.sort((a, b) => {
+      let cmp = 0;
+      switch (sortBy) {
+        case "price":
+          cmp = a.purchase_price - b.purchase_price;
+          break;
+        case "days": {
+          const dA = Date.now() - new Date(a.purchase_date).getTime();
+          const dB = Date.now() - new Date(b.purchase_date).getTime();
+          cmp = dA - dB;
+          break;
+        }
+        case "margin": {
+          const mA = (a.sale_price ?? a.target_sale_price ?? 0) - a.purchase_price - a.total_expenses;
+          const mB = (b.sale_price ?? b.target_sale_price ?? 0) - b.purchase_price - b.total_expenses;
+          cmp = mA - mB;
+          break;
+        }
+        default: // date
+          cmp = new Date(a.purchase_date).getTime() - new Date(b.purchase_date).getTime();
+      }
+      return sortOrder === "asc" ? cmp : -cmp;
+    });
+
+    return result;
+  }, [vehicles, search, statusFilter, brandFilter, fuelFilter, minPrice, maxPrice, minYear, maxYear, sortBy, sortOrder]);
 
   const kpis = useMemo(() => {
     const inStock = vehicles.filter(v => v.status !== "vendu").length;
@@ -183,6 +247,115 @@ export function VehiclesClient({ vehicles }: VehiclesClientProps) {
         </div>
 
         <div className="flex items-center justify-between gap-3 sm:justify-end">
+          {/* Advanced filters */}
+          {mounted && (
+            <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
+              <SheetTrigger
+                render={
+                  <button className="inline-flex items-center gap-2 rounded-[10px] border border-border bg-white px-3 py-2 text-[13px] font-semibold text-foreground transition-colors hover:bg-accent">
+                    <SlidersHorizontal className="size-4" />
+                    Filtres
+                    {activeAdvancedCount > 0 && (
+                      <span className="flex size-5 items-center justify-center rounded-full bg-brand text-[11px] font-bold text-white">
+                        {activeAdvancedCount}
+                      </span>
+                    )}
+                  </button>
+                }
+              />
+              <SheetContent side="right" className="w-[320px] overflow-y-auto">
+                <SheetTitle className="text-[16px] font-semibold tracking-tight mb-6">Filtres avancés</SheetTitle>
+
+                <div className="space-y-5">
+                  {/* Price range */}
+                  <div className="space-y-2">
+                    <Label className="text-[13px] font-semibold">Prix d&apos;achat (€)</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        type="number" step="100" min="0" placeholder="Min"
+                        value={minPrice} onChange={(e) => setMinPrice(e.target.value)}
+                        className="h-9 text-[13px] tabular-nums"
+                      />
+                      <Input
+                        type="number" step="100" min="0" placeholder="Max"
+                        value={maxPrice} onChange={(e) => setMaxPrice(e.target.value)}
+                        className="h-9 text-[13px] tabular-nums"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Year range */}
+                  <div className="space-y-2">
+                    <Label className="text-[13px] font-semibold">Année</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        type="number" min="1990" max="2030" placeholder="Min"
+                        value={minYear} onChange={(e) => setMinYear(e.target.value)}
+                        className="h-9 text-[13px] tabular-nums"
+                      />
+                      <Input
+                        type="number" min="1990" max="2030" placeholder="Max"
+                        value={maxYear} onChange={(e) => setMaxYear(e.target.value)}
+                        className="h-9 text-[13px] tabular-nums"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Fuel type */}
+                  <div className="space-y-2">
+                    <Label className="text-[13px] font-semibold">Carburant</Label>
+                    <Select value={fuelFilter} onValueChange={(v) => v && setFuelFilter(v)}>
+                      <SelectTrigger className="h-9 text-[13px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Tous</SelectItem>
+                        {fuelOptions.filter((f) => f !== "all").map((fuel) => (
+                          <SelectItem key={fuel} value={fuel}>{fuel}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Sort */}
+                  <div className="space-y-2">
+                    <Label className="text-[13px] font-semibold">Trier par</Label>
+                    <Select value={sortBy} onValueChange={(v) => v && setSortBy(v as typeof sortBy)}>
+                      <SelectTrigger className="h-9 text-[13px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="date">Date d&apos;ajout</SelectItem>
+                        <SelectItem value="price">Prix d&apos;achat</SelectItem>
+                        <SelectItem value="days">Jours en stock</SelectItem>
+                        <SelectItem value="margin">Marge estimée</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <button
+                      onClick={() => setSortOrder((o) => o === "asc" ? "desc" : "asc")}
+                      className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-semibold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                    >
+                      <ArrowUpDown className="size-3.5" />
+                      {sortOrder === "asc" ? "Croissant" : "Décroissant"}
+                    </button>
+                  </div>
+
+                  {/* Reset */}
+                  <Button
+                    variant="outline"
+                    className="w-full text-[13px]"
+                    onClick={() => {
+                      setMinPrice(""); setMaxPrice(""); setMinYear(""); setMaxYear("");
+                      setFuelFilter("all"); setSortBy("date"); setSortOrder("desc");
+                    }}
+                  >
+                    Réinitialiser les filtres
+                  </Button>
+                </div>
+              </SheetContent>
+            </Sheet>
+          )}
+
           {/* View toggle */}
           <div className="flex rounded-[10px] bg-muted p-1 gap-0.5">
             <button

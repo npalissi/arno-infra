@@ -1312,6 +1312,14 @@ export function VehicleDetailClient({
             targetSalePrice={vehicle.target_sale_price}
           />
         )}
+
+        {/* Sale simulator — only for unsold vehicles */}
+        {!vehicle.sale_price && (
+          <SaleSimulatorCard
+            totalCost={totalCost}
+            purchaseDate={vehicle.purchase_date}
+          />
+        )}
       </div>
 
       {/* Frais section — always visible */}
@@ -1477,6 +1485,102 @@ function RecommendedPriceCard({
             <span>30%</span>
           </div>
         </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ── Sale Simulator Card ────────────────────────────────────
+
+function SaleSimulatorCard({
+  totalCost,
+  purchaseDate,
+}: {
+  totalCost: number;
+  purchaseDate: string;
+}) {
+  const [salePriceEuros, setSalePriceEuros] = useState("");
+
+  const salePriceCentimes = salePriceEuros ? Math.round(parseFloat(salePriceEuros) * 100) : null;
+  const daysHeld = Math.ceil((Date.now() - new Date(purchaseDate).getTime()) / 86400000);
+
+  const grossMargin = salePriceCentimes !== null ? salePriceCentimes - totalCost : null;
+  const tva = grossMargin !== null && grossMargin > 0 ? Math.round((grossMargin * 20) / 120) : 0;
+  const netMargin = grossMargin !== null ? grossMargin - tva : null;
+  const marginPercent = salePriceCentimes && netMargin !== null && salePriceCentimes > 0
+    ? ((netMargin / salePriceCentimes) * 100).toFixed(1)
+    : null;
+  const profitPerDay = netMargin !== null && daysHeld > 0
+    ? Math.round(netMargin / daysHeld)
+    : null;
+
+  const variant = netMargin !== null && netMargin >= 0 ? "positive" : "destructive";
+
+  return (
+    <Card className="border-border">
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center gap-2 text-[16px] font-semibold tracking-tight">
+          <CircleDollarSign className="size-4 text-brand" />
+          Simulateur de vente
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {/* Price input */}
+        <div className="space-y-1.5">
+          <label className="text-[13px] font-semibold text-muted-foreground">
+            Prix de vente simulé (€)
+          </label>
+          <Input
+            type="number"
+            step="0.01"
+            min="0"
+            placeholder="22 000"
+            value={salePriceEuros}
+            onChange={(e) => setSalePriceEuros(e.target.value)}
+            className="h-10 font-mono tabular-nums text-[15px]"
+          />
+        </div>
+
+        {/* Results */}
+        {salePriceCentimes !== null && grossMargin !== null && netMargin !== null && (
+          <div className="space-y-1 rounded-xl bg-muted/50 px-4 py-3">
+            <div className="flex items-center justify-between">
+              <span className="text-[13px] font-medium text-muted-foreground">Marge brute</span>
+              <span className={`text-[14px] font-mono font-semibold tabular-nums ${variant === "positive" ? "text-positive" : "text-destructive"}`}>
+                {formatPrice(grossMargin)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-[13px] font-medium text-muted-foreground">TVA sur marge</span>
+              <span className="text-[14px] font-mono font-medium tabular-nums text-muted-foreground">
+                - {formatPrice(tva)}
+              </span>
+            </div>
+            <Separator className="my-1.5 bg-border" />
+            <div className="flex items-center justify-between">
+              <span className="text-[13px] font-semibold text-foreground">Marge nette</span>
+              <span className={`text-[16px] font-mono font-bold tabular-nums ${variant === "positive" ? "text-positive" : "text-destructive"}`}>
+                {formatPrice(netMargin)}
+              </span>
+            </div>
+            {marginPercent && (
+              <div className="flex items-center justify-between">
+                <span className="text-[13px] font-medium text-muted-foreground">% Marge</span>
+                <span className={`text-[14px] font-mono font-bold tabular-nums ${variant === "positive" ? "text-positive" : "text-destructive"}`}>
+                  {marginPercent}%
+                </span>
+              </div>
+            )}
+            {profitPerDay !== null && (
+              <div className="flex items-center justify-between pt-1">
+                <span className="text-[13px] font-medium text-muted-foreground">Profit/jour ({daysHeld}j)</span>
+                <span className={`text-[13px] font-mono font-semibold tabular-nums ${variant === "positive" ? "text-positive" : "text-destructive"}`}>
+                  {formatPrice(profitPerDay)}/j
+                </span>
+              </div>
+            )}
+          </div>
+        )}
       </CardContent>
     </Card>
   );

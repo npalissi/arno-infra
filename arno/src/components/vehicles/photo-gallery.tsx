@@ -51,10 +51,20 @@ const DOC_TYPES = [
 // ── Gallery ───────────────────────────────────────────────
 
 export function PhotoGallery({ photos: initialPhotos, brand, model, vehicleId, compact }: PhotoGalleryProps) {
-  const [photos, setPhotos] = useState(initialPhotos);
+  const [allPhotos, setAllPhotos] = useState(initialPhotos);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const [photoFilter, setPhotoFilter] = useState<"all" | "auto1" | "local">("all");
+
+  const photos = allPhotos.filter((p) => {
+    if (photoFilter === "auto1") return p.imported_from_auto1;
+    if (photoFilter === "local") return !p.imported_from_auto1;
+    return true;
+  });
+
+  const auto1Count = allPhotos.filter((p) => p.imported_from_auto1).length;
+  const localCount = allPhotos.length - auto1Count;
 
   const selected = photos[selectedIndex];
   const total = photos.length;
@@ -76,7 +86,7 @@ export function PhotoGallery({ photos: initialPhotos, brand, model, vehicleId, c
   function handleSetPrimary(photoId: string) {
     startTransition(async () => {
       await setPrimaryPhoto({ vehicleId, photoId });
-      setPhotos((prev) =>
+      setAllPhotos((prev) =>
         prev.map((p) => ({ ...p, is_primary: p.id === photoId })),
       );
     });
@@ -85,7 +95,7 @@ export function PhotoGallery({ photos: initialPhotos, brand, model, vehicleId, c
   function handleDelete(photoId: string) {
     startTransition(async () => {
       await deletePhoto(photoId);
-      setPhotos((prev) => {
+      setAllPhotos((prev) => {
         const next = prev.filter((p) => p.id !== photoId);
         if (selectedIndex >= next.length) setSelectedIndex(Math.max(0, next.length - 1));
         return next;
@@ -96,7 +106,7 @@ export function PhotoGallery({ photos: initialPhotos, brand, model, vehicleId, c
   function handleReclassify(photoId: string, docType: string) {
     startTransition(async () => {
       await reclassifyAsDocument(photoId, docType);
-      setPhotos((prev) => {
+      setAllPhotos((prev) => {
         const next = prev.filter((p) => p.id !== photoId);
         if (selectedIndex >= next.length) setSelectedIndex(Math.max(0, next.length - 1));
         return next;
@@ -121,6 +131,34 @@ export function PhotoGallery({ photos: initialPhotos, brand, model, vehicleId, c
 
   return (
     <div className="space-y-3">
+      {/* ── Photo counter + filter tabs ── */}
+      {!compact && allPhotos.length > 0 && (
+        <div className="flex items-center justify-between">
+          <span className="text-[12px] font-semibold text-muted-foreground">
+            {allPhotos.length} photo{allPhotos.length > 1 ? "s" : ""}
+            {auto1Count > 0 && ` · ${auto1Count} Auto1`}
+            {localCount > 0 && ` · ${localCount} locale${localCount > 1 ? "s" : ""}`}
+          </span>
+          {auto1Count > 0 && localCount > 0 && (
+            <div className="flex rounded-lg bg-muted p-0.5 gap-0.5">
+              {(["all", "auto1", "local"] as const).map((f) => (
+                <button
+                  key={f}
+                  onClick={() => { setPhotoFilter(f); setSelectedIndex(0); }}
+                  className={`rounded-md px-2 py-1 text-[11px] font-semibold transition-all ${
+                    photoFilter === f
+                      ? "bg-white text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {f === "all" ? "Toutes" : f === "auto1" ? "Auto1" : "Locales"}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── Main image ── */}
       <div className="group relative overflow-hidden rounded-xl border border-black/[0.04]">
         {/* Photo counter */}
