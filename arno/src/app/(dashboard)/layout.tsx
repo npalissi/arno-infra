@@ -11,6 +11,7 @@ import {
   SheetContent,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { ToastProvider } from "@/components/shared/toast";
 
 const pageTitles: Record<string, string> = {
   "/dashboard": "Dashboard",
@@ -40,6 +41,7 @@ export default function DashboardLayout({
   useEffect(() => setMounted(true), []);
 
   return (
+    <ToastProvider>
     <div className="flex h-screen overflow-hidden">
       {/* Desktop sidebar */}
       <div className="hidden lg:block">
@@ -92,5 +94,6 @@ export default function DashboardLayout({
         </div>
       </main>
     </div>
+    </ToastProvider>
   );
 }

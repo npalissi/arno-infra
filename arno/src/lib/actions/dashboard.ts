@@ -103,6 +103,149 @@ export async function getDashboardStats(): Promise<ActionResult<DashboardStats>>
 }
 
 // =============================================================
+// getStockAlerts
+// =============================================================
+
+export type StockAlert = {
+  id: string;
+  severity: 'warning' | 'critical' | 'info';
+  message: string;
+  vehicleId: string;
+  vehicleName: string;
+};
+
+export async function getStockAlerts(): Promise<ActionResult<StockAlert[]>> {
+  const supabase = await createClient();
+
+  const { data: vehicles } = await supabase
+    .from('vehicles')
+    .select('id, brand, model, purchase_date, status, target_sale_price')
+    .in('status', ['en_stock', 'en_preparation', 'en_vente']) as unknown as {
+    data: { id: string; brand: string; model: string; purchase_date: string; status: string; target_sale_price: number | null }[] | null;
+  };
+
+  if (!vehicles) return { data: [], error: null };
+
+  const alerts: StockAlert[] = [];
+  const now = Date.now();
+
+  for (const v of vehicles) {
+    const days = Math.ceil((now - new Date(v.purchase_date).getTime()) / 86400000);
+    const name = `${v.brand} ${v.model}`;
+
+    if (days > 60) {
+      alerts.push({
+        id: `critical-${v.id}`,
+        severity: 'critical',
+        message: `${days} jours en stock — envisagez une baisse de prix`,
+        vehicleId: v.id,
+        vehicleName: name,
+      });
+    } else if (days > 30) {
+      alerts.push({
+        id: `warning-${v.id}`,
+        severity: 'warning',
+        message: `${days} jours en stock`,
+        vehicleId: v.id,
+        vehicleName: name,
+      });
+    }
+
+    if (v.status === 'en_vente' && !v.target_sale_price) {
+      alerts.push({
+        id: `info-price-${v.id}`,
+        severity: 'info',
+        message: `En vente sans prix affiché`,
+        vehicleId: v.id,
+        vehicleName: name,
+      });
+    }
+  }
+
+  // Sort: critical first, then warning, then info
+  const severityOrder = { critical: 0, warning: 1, info: 2 };
+  alerts.sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]);
+
+  return { data: alerts, error: null };
+}
+
+// =============================================================
+// getStockAnalytics
+// =============================================================
+
+export type StockAnalytics = {
+  avgDaysInStock: number;
+  capitalInvested: number;
+  estimatedRevenue: number;
+  vehiclesOver30Days: number;
+};
+
+export async function getStockAnalytics(): Promise<ActionResult<StockAnalytics>> {
+  const supabase = await createClient();
+
+  const { data: vehicles } = await supabase
+    .from('vehicles')
+    .select('id, purchase_date, purchase_price, target_sale_price, status')
+    .in('status', ['en_stock', 'en_preparation', 'en_vente']) as unknown as {
+    data: { id: string; purchase_date: string; purchase_price: number; target_sale_price: number | null; status: string }[] | null;
+  };
+
+  if (!vehicles || vehicles.length === 0) {
+    return {
+      data: { avgDaysInStock: 0, capitalInvested: 0, estimatedRevenue: 0, vehiclesOver30Days: 0 },
+      error: null,
+    };
+  }
+
+  const vehicleIds = vehicles.map((v) => v.id);
+
+  // Get expenses for capital invested calculation
+  const { data: expenses } = await supabase
+    .from('vehicle_expenses')
+    .select('vehicle_id, amount')
+    .in('vehicle_id', vehicleIds) as unknown as {
+    data: { vehicle_id: string; amount: number }[] | null;
+  };
+
+  const expensesByVehicle = new Map<string, number>();
+  if (expenses) {
+    for (const e of expenses) {
+      const current = expensesByVehicle.get(e.vehicle_id) ?? 0;
+      expensesByVehicle.set(e.vehicle_id, current + e.amount);
+    }
+  }
+
+  const now = Date.now();
+  let totalDays = 0;
+  let capitalInvested = 0;
+  let estimatedRevenue = 0;
+  let vehiclesOver30Days = 0;
+
+  for (const v of vehicles) {
+    const days = Math.ceil((now - new Date(v.purchase_date).getTime()) / 86400000);
+    totalDays += days;
+    if (days > 30) vehiclesOver30Days++;
+
+    const vehicleExpenses = expensesByVehicle.get(v.id) ?? 0;
+    capitalInvested += v.purchase_price + vehicleExpenses;
+
+    if (v.status === 'en_vente' && v.target_sale_price) {
+      estimatedRevenue += v.target_sale_price;
+    }
+  }
+
+  return {
+    data: {
+      avgDaysInStock: Math.round(totalDays / vehicles.length),
+      capitalInvested,
+      estimatedRevenue,
+      vehiclesOver30Days,
+    },
+    error: null,
+  };
+}
+
+// =============================================================
 // getRecentActivity
 // =============================================================
 
