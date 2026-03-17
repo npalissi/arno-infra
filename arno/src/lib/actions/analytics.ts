@@ -18,6 +18,7 @@ export type StockAnalytics = {
   vehiclesOver30Days: number;
   avgMarginPercent: number;
   totalInvested: number;
+  capitalInvested: number; // alias for totalInvested (compat with dashboard UI)
   estimatedRevenue: number;
 };
 
@@ -30,9 +31,11 @@ export type StockAlertType =
 export type StockAlertSeverity = 'info' | 'warning' | 'critical';
 
 export type StockAlert = {
+  id: string;
   type: StockAlertType;
   severity: StockAlertSeverity;
   vehicleId: string;
+  vehicleName: string;
   brand: string;
   model: string;
   message: string;
@@ -162,6 +165,7 @@ export async function getStockAnalytics(): Promise<ActionResult<StockAnalytics>>
       vehiclesOver30Days,
       avgMarginPercent,
       totalInvested,
+      capitalInvested: totalInvested,
       estimatedRevenue,
     },
     error: null,
@@ -232,6 +236,8 @@ export async function getStockAlerts(): Promise<ActionResult<StockAlert[]>> {
 
   const alerts: StockAlert[] = [];
 
+  let alertCounter = 0;
+
   for (const v of vehicles) {
     const days = daysBetween(v.purchase_date, null);
     const label = `${v.brand} ${v.model}`;
@@ -239,23 +245,27 @@ export async function getStockAlerts(): Promise<ActionResult<StockAlert[]>> {
     // Stock > 60 jours = critical
     if (days > 60) {
       alerts.push({
+        id: `critical-${v.id}-${alertCounter++}`,
         type: 'old_stock',
         severity: 'critical',
         vehicleId: v.id,
+        vehicleName: label,
         brand: v.brand,
         model: v.model,
-        message: `${label} en stock depuis ${days} jours`,
+        message: `${days} jours en stock — envisagez une baisse de prix`,
         daysInStock: days,
       });
     } else if (days > 45) {
       // Stock > 45 jours = warning
       alerts.push({
+        id: `warning-${v.id}-${alertCounter++}`,
         type: 'old_stock',
         severity: 'warning',
         vehicleId: v.id,
+        vehicleName: label,
         brand: v.brand,
         model: v.model,
-        message: `${label} en stock depuis ${days} jours`,
+        message: `${days} jours en stock`,
         daysInStock: days,
       });
     }
@@ -263,24 +273,28 @@ export async function getStockAlerts(): Promise<ActionResult<StockAlert[]>> {
     // Pas de photos
     if ((photoCounts.get(v.id) ?? 0) === 0) {
       alerts.push({
+        id: `no-photos-${v.id}-${alertCounter++}`,
         type: 'no_photos',
         severity: 'warning',
         vehicleId: v.id,
+        vehicleName: label,
         brand: v.brand,
         model: v.model,
-        message: `${label} n'a aucune photo`,
+        message: `Aucune photo`,
       });
     }
 
     // En vente sans target_sale_price
     if (v.status === 'en_vente' && !v.target_sale_price) {
       alerts.push({
+        id: `no-target-${v.id}-${alertCounter++}`,
         type: 'no_target_price',
-        severity: 'warning',
+        severity: 'info',
         vehicleId: v.id,
+        vehicleName: label,
         brand: v.brand,
         model: v.model,
-        message: `${label} en vente sans prix cible`,
+        message: `En vente sans prix affiché`,
       });
     }
 
@@ -290,16 +304,112 @@ export async function getStockAlerts(): Promise<ActionResult<StockAlert[]>> {
       const totalCost = v.purchase_price + totalExpenses;
       if (v.target_sale_price < totalCost) {
         alerts.push({
+          id: `neg-margin-${v.id}-${alertCounter++}`,
           type: 'negative_margin',
           severity: 'critical',
           vehicleId: v.id,
+          vehicleName: label,
           brand: v.brand,
           model: v.model,
-          message: `${label} : marge projetée négative (cible ${(v.target_sale_price / 100).toFixed(0)} € < coût ${(totalCost / 100).toFixed(0)} €)`,
+          message: `Marge projetée négative (cible ${(v.target_sale_price / 100).toFixed(0)} € < coût ${(totalCost / 100).toFixed(0)} €)`,
         });
       }
     }
   }
 
+  // Sort: critical first, then warning, then info
+  const severityOrder: Record<string, number> = { critical: 0, warning: 1, info: 2 };
+  alerts.sort((a, b) => (severityOrder[a.severity] ?? 2) - (severityOrder[b.severity] ?? 2));
+
   return { data: alerts, error: null };
+}
+
+// =============================================================
+// 3. getRecommendedPrice
+// =============================================================
+
+export type RecommendedPrice = {
+  recommendedPrice: number;
+  costTotal: number;
+  projectedGrossMargin: number;
+  projectedTva: number;
+  projectedNetMargin: number;
+  projectedNetMarginPercent: number;
+};
+
+/**
+ * Calcule le prix de vente recommandé pour atteindre une marge nette cible.
+ *
+ * Formule : prix = costTotal × 120 / (100 - targetMarginPercent)
+ * Cela garantit que la marge nette après TVA sur marge = targetMarginPercent du coût total.
+ *
+ * Vérification :
+ *   marge_brute = prix - costTotal
+ *   tva = marge_brute × 20 / 120
+ *   marge_nette = marge_brute - tva = marge_brute × 100/120
+ *   On veut marge_nette = costTotal × targetMarginPercent / 100
+ *   Donc marge_brute × 100/120 = costTotal × target/100
+ *   marge_brute = costTotal × target × 120 / (100 × 100) = costTotal × target × 1.2 / 100
+ *   prix = costTotal + marge_brute = costTotal × (1 + target × 1.2 / 100)
+ *        = costTotal × (100 + target × 1.2) / 100
+ *        = costTotal × 120 / (100 - target) — en réarrangeant pour l'exactitude
+ */
+export async function getRecommendedPrice(
+  vehicleId: string,
+  targetMarginPercent: number = 15,
+): Promise<ActionResult<RecommendedPrice>> {
+  const supabase = await createClient();
+
+  // Récupérer le véhicule
+  const { data: vehicle, error: vehicleError } = await supabase
+    .from('vehicles')
+    .select('id, purchase_price')
+    .eq('id', vehicleId)
+    .single() as unknown as {
+    data: { id: string; purchase_price: number } | null;
+    error: { message: string } | null;
+  };
+
+  if (vehicleError) return { data: null, error: vehicleError.message };
+  if (!vehicle) return { data: null, error: 'Véhicule introuvable' };
+
+  // Récupérer les frais
+  const { data: expenses } = await supabase
+    .from('vehicle_expenses')
+    .select('amount')
+    .eq('vehicle_id', vehicleId) as unknown as {
+    data: { amount: number }[] | null;
+  };
+
+  const totalExpenses = expenses?.reduce((sum, e) => sum + e.amount, 0) ?? 0;
+  const costTotal = vehicle.purchase_price + totalExpenses;
+
+  if (targetMarginPercent >= 100) {
+    return { data: null, error: 'La marge cible doit être inférieure à 100%' };
+  }
+
+  // Prix recommandé : costTotal × 120 / (100 - targetMarginPercent)
+  const recommendedPrice = Math.round(costTotal * 120 / (100 - targetMarginPercent));
+
+  // Vérification des projections
+  const projectedGrossMargin = recommendedPrice - costTotal;
+  const projectedTva = projectedGrossMargin > 0
+    ? Math.round((projectedGrossMargin * 20) / 120)
+    : 0;
+  const projectedNetMargin = projectedGrossMargin - projectedTva;
+  const projectedNetMarginPercent = costTotal > 0
+    ? Math.round((projectedNetMargin / costTotal) * 10000) / 100
+    : 0;
+
+  return {
+    data: {
+      recommendedPrice,
+      costTotal,
+      projectedGrossMargin,
+      projectedTva,
+      projectedNetMargin,
+      projectedNetMarginPercent,
+    },
+    error: null,
+  };
 }

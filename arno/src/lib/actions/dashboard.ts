@@ -4,6 +4,10 @@ import { createClient } from '@/lib/supabase/server';
 import type { VehicleHistory } from '@/types/database';
 import type { ActionResult } from '@/lib/types';
 
+// NOTE: getStockAnalytics() and getStockAlerts() live in '@/lib/actions/analytics'.
+// Import them from there — not from this file.
+// (Re-exports from 'use server' modules break turbopack)
+
 // =============================================================
 // Types
 // =============================================================

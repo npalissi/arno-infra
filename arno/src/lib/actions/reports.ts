@@ -142,3 +142,144 @@ export async function getMonthlyReport(
 
   return { data: { soldVehicles, summary }, error: null };
 }
+
+// =============================================================
+// getAnnualTrends — achats/ventes par mois sur les 12 derniers mois
+// =============================================================
+
+export type MonthTrend = {
+  month: string; // "2026-03"
+  purchased: number;
+  sold: number;
+};
+
+export type AnnualTrends = {
+  months: MonthTrend[];
+  avgMarginPerVehicle: number;
+  topProfitable: RankedVehicle[];
+  leastProfitable: RankedVehicle[];
+};
+
+export type RankedVehicle = {
+  id: string;
+  brand: string;
+  model: string;
+  registration: string;
+  marge_nette: number;
+};
+
+export async function getAnnualTrends(): Promise<ActionResult<AnnualTrends>> {
+  const supabase = await createClient();
+
+  // 12 derniers mois (incluant le mois courant)
+  const now = new Date();
+  const months: MonthTrend[] = [];
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push({
+      month: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
+      purchased: 0,
+      sold: 0,
+    });
+  }
+
+  const startDate = months[0]!.month + '-01';
+
+  // Véhicules achetés depuis startDate
+  const { data: purchased } = await supabase
+    .from('vehicles')
+    .select('purchase_date')
+    .gte('purchase_date', startDate) as unknown as {
+    data: { purchase_date: string }[] | null;
+  };
+
+  if (purchased) {
+    for (const v of purchased) {
+      const key = v.purchase_date.slice(0, 7); // "YYYY-MM"
+      const m = months.find((m) => m.month === key);
+      if (m) m.purchased++;
+    }
+  }
+
+  // Véhicules vendus depuis startDate
+  const { data: sold } = await supabase
+    .from('vehicles')
+    .select('id, brand, model, registration, purchase_price, sale_price, sale_date')
+    .eq('status', 'vendu')
+    .not('sale_price', 'is', null)
+    .gte('sale_date', startDate) as unknown as {
+    data: {
+      id: string;
+      brand: string;
+      model: string;
+      registration: string;
+      purchase_price: number;
+      sale_price: number;
+      sale_date: string;
+    }[] | null;
+  };
+
+  if (sold) {
+    for (const v of sold) {
+      const key = v.sale_date.slice(0, 7);
+      const m = months.find((m) => m.month === key);
+      if (m) m.sold++;
+    }
+  }
+
+  // Calcul marges pour top/worst + moyenne
+  let avgMarginPerVehicle = 0;
+  const vehicleMargins: RankedVehicle[] = [];
+
+  if (sold && sold.length > 0) {
+    const vehicleIds = sold.map((v) => v.id);
+
+    const { data: expenses } = await supabase
+      .from('vehicle_expenses')
+      .select('vehicle_id, amount')
+      .in('vehicle_id', vehicleIds) as unknown as {
+      data: { vehicle_id: string; amount: number }[] | null;
+    };
+
+    const expensesByVehicle = new Map<string, number>();
+    if (expenses) {
+      for (const e of expenses) {
+        const current = expensesByVehicle.get(e.vehicle_id) ?? 0;
+        expensesByVehicle.set(e.vehicle_id, current + e.amount);
+      }
+    }
+
+    let totalNetMargin = 0;
+    for (const v of sold) {
+      const totalExpenses = expensesByVehicle.get(v.id) ?? 0;
+      const margeBrute = v.sale_price - v.purchase_price - totalExpenses;
+      const tva = margeBrute > 0 ? Math.round((margeBrute * 20) / 120) : 0;
+      const marge_nette = margeBrute - tva;
+      totalNetMargin += marge_nette;
+      vehicleMargins.push({
+        id: v.id,
+        brand: v.brand,
+        model: v.model,
+        registration: v.registration,
+        marge_nette,
+      });
+    }
+
+    avgMarginPerVehicle = Math.round(totalNetMargin / sold.length);
+  }
+
+  // Top 5 les plus rentables
+  const sorted = [...vehicleMargins].sort((a, b) => b.marge_nette - a.marge_nette);
+  const topProfitable = sorted.slice(0, 5);
+  const leastProfitable = sorted.slice(-5).reverse();
+
+  return {
+    data: {
+      months,
+      avgMarginPerVehicle,
+      topProfitable,
+      leastProfitable,
+    },
+    error: null,
+  };
+}
