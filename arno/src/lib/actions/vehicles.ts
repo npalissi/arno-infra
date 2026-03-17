@@ -76,6 +76,9 @@ type VehicleDetail = Vehicle & {
   margin: number | null;
   margin_percent: number | null;
   tva_on_margin: number | null;
+  recommended_price: number | null;
+  projected_net_margin: number | null;
+  projected_margin_percent: number | null;
 };
 
 // =============================================================
@@ -210,6 +213,22 @@ export async function getVehicle(
     tva_on_margin = margin > 0 ? Math.round((margin * 20) / 120) : 0;
   }
 
+  // Prix recommandé (marge nette cible 15% du coût total après TVA sur marge)
+  const targetMarginPercent = 15;
+  let recommended_price: number | null = null;
+  let projected_net_margin: number | null = null;
+  let projected_margin_percent: number | null = null;
+
+  if (vehicle.status !== 'vendu') {
+    recommended_price = Math.round(total_cost * 120 / (100 - targetMarginPercent));
+    const projGross = recommended_price - total_cost;
+    const projTva = projGross > 0 ? Math.round((projGross * 20) / 120) : 0;
+    projected_net_margin = projGross - projTva;
+    projected_margin_percent = total_cost > 0
+      ? Math.round((projected_net_margin / total_cost) * 10000) / 100
+      : null;
+  }
+
   return {
     data: {
       ...vehicle,
@@ -222,6 +241,9 @@ export async function getVehicle(
       margin,
       margin_percent,
       tva_on_margin,
+      recommended_price,
+      projected_net_margin,
+      projected_margin_percent,
     },
     error: null,
   };
@@ -407,4 +429,70 @@ export async function quickUpdateStatus(
   revalidatePath('/vehicles');
   revalidatePath(`/vehicles/${id}`);
   return { data: null, error: null };
+}
+
+// =============================================================
+// 7. updateMultipleStatus
+// =============================================================
+
+export async function updateMultipleStatus(
+  ids: string[],
+  newStatus: VehicleStatus,
+): Promise<ActionResult<{ updated: number; errors: string[] }>> {
+  if (ids.length === 0) return { data: { updated: 0, errors: [] }, error: null };
+
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  // Récupérer les véhicules concernés
+  const { data: vehicles, error: fetchError } = await supabase
+    .from('vehicles')
+    .select('id, brand, model, status, sale_price')
+    .in('id', ids) as unknown as {
+    data: { id: string; brand: string; model: string; status: string; sale_price: number | null }[] | null;
+    error: { message: string } | null;
+  };
+
+  if (fetchError) return { data: null, error: fetchError.message };
+  if (!vehicles || vehicles.length === 0) return { data: null, error: 'Aucun véhicule trouvé' };
+
+  let updated = 0;
+  const errors: string[] = [];
+
+  for (const v of vehicles) {
+    // Bloquer vendu sans sale_price
+    if (newStatus === 'vendu' && !v.sale_price) {
+      errors.push(`${v.brand} ${v.model} : impossible de marquer comme vendu sans prix de vente`);
+      continue;
+    }
+
+    // Skip si même status
+    if (v.status === newStatus) continue;
+
+    const { error } = await supabase
+      .from('vehicles')
+      .update({ status: newStatus })
+      .eq('id', v.id);
+
+    if (error) {
+      errors.push(`${v.brand} ${v.model} : ${error.message}`);
+      continue;
+    }
+
+    // Historique
+    await supabase.from('vehicle_history').insert({
+      vehicle_id: v.id,
+      action: 'changement_status',
+      description: `Status changé : ${v.status} → ${newStatus}`,
+      created_by: user?.id ?? null,
+    });
+
+    updated++;
+  }
+
+  revalidatePath('/vehicles');
+  return { data: { updated, errors }, error: null };
 }

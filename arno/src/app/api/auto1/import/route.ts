@@ -27,6 +27,8 @@ export async function POST(request: Request) {
     let imported = 0;
     const errors: string[] = [];
 
+    const photoCountByStock: Record<string, number> = {};
+
     for (const stockNumber of stockNumbers) {
       try {
         // 1. Fetch données Auto1
@@ -34,6 +36,20 @@ export async function POST(request: Request) {
 
         // 2. Map vers schéma Arno
         const { vehicle, photos } = mapAuto1ToVehicle(auto1Data);
+
+        // 2b. Check doublon par stock_number
+        if (vehicle.stock_number) {
+          const { data: existing } = await supabase
+            .from("vehicles")
+            .select("id")
+            .eq("stock_number", vehicle.stock_number)
+            .maybeSingle() as unknown as { data: { id: string } | null };
+
+          if (existing) {
+            errors.push(`${stockNumber}: Véhicule déjà importé (stock_number ${vehicle.stock_number})`);
+            continue;
+          }
+        }
 
         // 3. Insert véhicule
         const { data: insertedVehicle, error: vehicleError } = await supabase
@@ -114,6 +130,7 @@ export async function POST(request: Request) {
           }
         }
 
+        photoCountByStock[stockNumber] = photoInserts.length;
         imported++;
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Erreur inconnue";
@@ -121,7 +138,7 @@ export async function POST(request: Request) {
       }
     }
 
-    return NextResponse.json({ imported, errors });
+    return NextResponse.json({ imported, errors, photosImported: photoCountByStock });
   } catch {
     return NextResponse.json(
       { error: "Erreur serveur interne" },
