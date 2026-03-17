@@ -85,10 +85,19 @@ type VehicleDetail = Vehicle & {
 // Filters
 // =============================================================
 
+type VehicleSortBy = 'created_at' | 'purchase_price' | 'days_in_stock' | 'margin';
+
 type VehicleFilters = {
   status?: VehicleStatus;
   brand?: string;
   search?: string;
+  minPrice?: number;
+  maxPrice?: number;
+  minYear?: number;
+  maxYear?: number;
+  fuelType?: string;
+  sortBy?: VehicleSortBy;
+  sortOrder?: 'asc' | 'desc';
 };
 
 // =============================================================
@@ -101,10 +110,21 @@ export async function getVehicles(
   const supabase = await createClient();
 
   // Récupérer les véhicules
+  const sortBy = filters?.sortBy ?? 'created_at';
+  const sortOrder = filters?.sortOrder ?? 'desc';
+
+  // Sort by margin/days_in_stock is done post-query (needs expenses data)
+  const dbSortable = sortBy === 'created_at' || sortBy === 'purchase_price';
+
   let query = supabase
     .from('vehicles')
-    .select('*')
-    .order('created_at', { ascending: false });
+    .select('*');
+
+  if (dbSortable) {
+    query = query.order(sortBy, { ascending: sortOrder === 'asc' });
+  } else {
+    query = query.order('created_at', { ascending: false });
+  }
 
   if (filters?.status) {
     query = query.eq('status', filters.status);
@@ -116,6 +136,21 @@ export async function getVehicles(
     query = query.or(
       `brand.ilike.%${filters.search}%,model.ilike.%${filters.search}%,registration.ilike.%${filters.search}%`,
     );
+  }
+  if (filters?.minPrice !== undefined) {
+    query = query.gte('purchase_price', filters.minPrice);
+  }
+  if (filters?.maxPrice !== undefined) {
+    query = query.lte('purchase_price', filters.maxPrice);
+  }
+  if (filters?.minYear !== undefined) {
+    query = query.gte('year', filters.minYear);
+  }
+  if (filters?.maxYear !== undefined) {
+    query = query.lte('year', filters.maxYear);
+  }
+  if (filters?.fuelType) {
+    query = query.eq('fuel_type', filters.fuelType);
   }
 
   const { data, error } = await query;
@@ -168,6 +203,25 @@ export async function getVehicles(
       days_in_stock,
     };
   });
+
+  // Post-query sort for computed fields
+  if (sortBy === 'days_in_stock') {
+    result.sort((a, b) =>
+      sortOrder === 'asc'
+        ? a.days_in_stock - b.days_in_stock
+        : b.days_in_stock - a.days_in_stock
+    );
+  } else if (sortBy === 'margin') {
+    result.sort((a, b) => {
+      const marginA = a.sale_price !== null
+        ? a.sale_price - a.purchase_price - a.total_expenses
+        : -(a.purchase_price + a.total_expenses);
+      const marginB = b.sale_price !== null
+        ? b.sale_price - b.purchase_price - b.total_expenses
+        : -(b.purchase_price + b.total_expenses);
+      return sortOrder === 'asc' ? marginA - marginB : marginB - marginA;
+    });
+  }
 
   return { data: result, error: null };
 }

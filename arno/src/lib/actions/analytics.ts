@@ -413,3 +413,71 @@ export async function getRecommendedPrice(
     error: null,
   };
 }
+
+// =============================================================
+// 4. simulateSale
+// =============================================================
+
+export type SaleSimulation = {
+  salePrice: number;
+  costTotal: number;
+  grossMargin: number;
+  tvaOnMargin: number;
+  netMargin: number;
+  netMarginPercent: number;
+  profitPerDay: number;
+};
+
+export async function simulateSale(
+  vehicleId: string,
+  salePrice: number,
+): Promise<ActionResult<SaleSimulation>> {
+  if (salePrice <= 0) return { data: null, error: 'Le prix de vente doit être positif' };
+
+  const supabase = await createClient();
+
+  const { data: vehicle, error: vehicleError } = await supabase
+    .from('vehicles')
+    .select('id, purchase_price, purchase_date')
+    .eq('id', vehicleId)
+    .single() as unknown as {
+    data: { id: string; purchase_price: number; purchase_date: string } | null;
+    error: { message: string } | null;
+  };
+
+  if (vehicleError) return { data: null, error: vehicleError.message };
+  if (!vehicle) return { data: null, error: 'Véhicule introuvable' };
+
+  const { data: expenses } = await supabase
+    .from('vehicle_expenses')
+    .select('amount')
+    .eq('vehicle_id', vehicleId) as unknown as {
+    data: { amount: number }[] | null;
+  };
+
+  const totalExpenses = expenses?.reduce((sum, e) => sum + e.amount, 0) ?? 0;
+  const costTotal = vehicle.purchase_price + totalExpenses;
+
+  const grossMargin = salePrice - costTotal;
+  const tvaOnMargin = grossMargin > 0 ? Math.round((grossMargin * 20) / 120) : 0;
+  const netMargin = grossMargin - tvaOnMargin;
+  const netMarginPercent = costTotal > 0
+    ? Math.round((netMargin / costTotal) * 10000) / 100
+    : 0;
+
+  const daysInStock = daysBetween(vehicle.purchase_date, null);
+  const profitPerDay = daysInStock > 0 ? Math.round(netMargin / daysInStock) : netMargin;
+
+  return {
+    data: {
+      salePrice,
+      costTotal,
+      grossMargin,
+      tvaOnMargin,
+      netMargin,
+      netMarginPercent,
+      profitPerDay,
+    },
+    error: null,
+  };
+}
