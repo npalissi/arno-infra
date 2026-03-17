@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OCR Test — VM79011</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f172a; color: #e2e8f0; padding: 24px; }
+    h1 { font-size: 24px; margin-bottom: 8px; }
+    .subtitle { color: #94a3b8; margin-bottom: 24px; font-size: 14px; }
+    .stats { display: flex; gap: 16px; margin-bottom: 32px; }
+    .stat { background: #1e293b; border-radius: 12px; padding: 16px 20px; }
+    .stat-value { font-size: 28px; font-weight: 700; }
+    .stat-label { font-size: 12px; color: #94a3b8; margin-top: 4px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 16px; }
+    .card { background: #1e293b; border-radius: 12px; overflow: hidden; border: 2px solid transparent; }
+    .card.document { border-color: #f59e0b; }
+    .card.photo { border-color: #22c55e; }
+    .card img { width: 100%; height: 220px; object-fit: cover; }
+    .card-body { padding: 16px; }
+    .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; text-transform: uppercase; margin-bottom: 8px; }
+    .badge.document { background: #f59e0b20; color: #f59e0b; }
+    .badge.photo { background: #22c55e20; color: #22c55e; }
+    .badge.gallery { background: #3b82f620; color: #3b82f6; }
+    .badge.highlight { background: #a855f720; color: #a855f7; }
+    .badge.damage { background: #ef444420; color: #ef4444; }
+    .meta { display: flex; gap: 12px; font-size: 12px; color: #94a3b8; margin: 8px 0; }
+    .meta span { display: flex; align-items: center; gap: 4px; }
+    .ocr-text { font-size: 11px; color: #64748b; background: #0f172a; padding: 8px 12px; border-radius: 8px; max-height: 80px; overflow-y: auto; margin-top: 8px; white-space: pre-wrap; word-break: break-all; }
+    .label { font-size: 13px; color: #cbd5e1; }
+  </style>
+</head>
+<body>
+  <h1>OCR Test — VM79011</h1>
+  <p class="subtitle">Peugeot ? 2018 — 17 photos analysées</p>
+
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-value">17</div>
+      <div class="stat-label">Photos total</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value" style="color: #22c55e">16</div>
+      <div class="stat-label">Photos véhicule</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value" style="color: #f59e0b">1</div>
+      <div class="stat-label">Documents détectés</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">5s</div>
+      <div class="stat-label">Temps total OCR</div>
+    </div>
+  </div>
+
+  <div class="grid">
+    
+    <div class="card photo">
+      <img src="https://img-pa.auto1.com/imgf2/51/f251ce9c89a152c7aecdaa2f474008fc/pa/VM79011_d97c3441af2c6cc5e0a61b386cce96ba.jpg" alt="Photo 1" loading="lazy" />
+      <div class="card-body">
+        <span class="badge photo">Photo véhicule</span>
+        <span class="badge gallery">gallery</span>
+        <div class="label">Galerie</div>
+        <div class="meta">
+          <span>Confidence: <b>23%</b></span>
+          <span>Mots: <b>37</b></span>
+          <span>OCR: <b>371ms</b></span>
+        </div>
+        <div class="ocr-text">| } OPTION Mn)
+Sn 3e 78) >
+
+ES s…
+
+A: usé
+VS ÿ
+Ne 65
+— D>> Ré 7 #
+>> Ss 5 5 >
+2 4 É : - P- = sise,
+Ë ;=—=. Fr.</div>
+      </div>
+    </div>
+    
+    <div class="card photo">
+      <img src="https://img-pa.auto1.com/imgf2/51/f251ce9c89a152c7aecdaa2f474008fc/pa/VM79011_52da50a5c0930eda867f1c90aa03257d.jpg" alt="Photo 2" loading="lazy" />
+      <div class="card-body">
+        <span class="badge photo">Photo véhicule</span>
+        <span class="badge gallery">gallery</span>
+        <div class="label">Galerie</div>
+        <div class="meta">
+          <span>Confidence: <b>29%</b></span>
+          <span>Mots: <b>58</b></span>
+          <span>OCR: <b>462ms</b></span>
+        </div>
+        <div class="ocr-text">mm 1 te FA ë
+= ee. A :
+eu À p - pro
+EE 7
+1 re,
+09 42 \ » 07
+ÿ pe D OT)
+Pi SN
+3 JE Ka “24 ss)
+E ÿ
+S ce d = 4 > y
+‘2 x
+- 3 F p- —_
+M ee, 14e es
+a, >-- 2 vues</div>
+      </div>
+    </div>
+    
+    <div class="card photo">
+      <img src="https://img-pa.auto1.com/imgf2/51/f251ce9c89a152c7aecdaa2f474008fc/pa/VM79011_522a173bdbfb4fc8fd7e1b8788c83c4c.jpg" alt="Photo 3" loading="lazy" />
+      <div class="card-body">
+        <span class="badge photo">Photo véhicule</span>
+        <span class="badge gallery">gallery</span>
+        <div class="label">Galerie</div>
+        <div class="meta">
+          <span>Confidence: <b>40%</b></span>
+          <span>Mots: <b>12</b></span>
+          <span>OCR: <b>194ms</b></span>
+        </div>
+        <div class="ocr-text">;
+
+N _ Ve. | Û
+= V5 pe |
+s y</div>
+      </div>
+    </div>
+    
+    <div class="card photo">
+      <img src="https://img-pa.auto1.com/imgf2/51/f251ce9c89a152c7aecdaa2f474008fc/pa/VM79011_0464c7d6a6413425c3801be9e9fd4dcb.jpg" alt="Photo 4" loading="lazy" />
+      <div class="card-body">
+        <span class="badge photo">Photo véhicule</span>
+        <span class="badge gallery">gallery</span>
+        <div class="label">Galerie</div>
+        <div class="meta">
+          <span>Confidence: <b>29%</b></span>
+          <span>Mots: <b>53</b></span>
+          <span>OCR: <b>398ms</b></span>
+        </div>
+        <div class="ocr-text">= A eu ue
+
+NE 4-1 = me
+
+a, 3% ne de Le de
+8 —— - ES
+
+pr” = ; —— =
+
+/ 4}; 0. 6 À
+‘ à Pi PES e P = F
+aee)"-- 93
+à _ ae, es és >;
+
+p > Q ;
+—2008 vie 357 it —</div>
+      </div>
+    </div>
+    
+    <div class="card photo">
+      <img src="https://img-pa.auto1.com/imgf2/51/f251ce9c89a152c7aecdaa2f474008fc/pa/VM79011_782715f5da359514f0a9e3db09145594.jpg" alt="Photo 5" loading="lazy" />
+      <div class="card-body">
+        <span class="badge photo">Photo véhicule</span>
+        <span class="badge gallery">gallery</span>
+        <div class="label">Galerie</div>
+        <div class="meta">
+          <span>Confidence: <b>16%</b></span>
+          <span>Mots: <b>32</b></span>
+          <span>OCR: <b>492ms</b></span>
+        </div>
+        <div class="ocr-text">a =
+a #. _ 921 _M10PGTVPO71P647 =,
+BDs. =... ue … = =
+E. ss Qt OsOIï! ss.
+Lu. een à
+qe à s
+0°... gg uwst ss)
+se sn iris</div>
+      </div>
+    </div>
+    
+    <div class="card photo">
+      <img src="https://img-pa.auto1.com/imgf2/51/f251ce9c89a152c7aecdaa2f474008fc/pa/VM79011_b97da05e667c643abb5cef43b24073f6.jpg" alt="Photo 6" loading="lazy" />
+      <div class="card-body">
+        <span class="badge photo">Photo véhicule</span>
+        <span class="badge gallery">gallery</span>
+        <div class="label">Galerie</div>
+        <div class="meta">
+          <span>Confidence: <b>35%</b></span>
+          <span>Mots: <b>48</b></span>
+          <span>OCR: <b>317ms</b></span>
+        </div>
+        <div class="ocr-text">lagénecccasionnée "9% 68 VANTS fit fol Vouilez nous excuser pour
+Levi tone doi
+ss 1110000
+Fan | IE AE ct ae pese es
+Résumé
+moi .
+Shui insvave
+| an
+Ste crée (gages, opposition, vo.)
+&lt;2D ‘Elle simples otséerier vos formalités aviitatves pour la caatonaul'immatrctalon de
+simplimmat ratios</div>
+      </div>
+    </div>
+    
+    <div class="card photo">
+      <img src="https://img-pa.auto1.com/imgf2/51/f251ce9c89a152c7aecdaa2f474008fc/pa/VM79011_b4532dfac35e37d82c555ed746ca46a3.jpg" alt="Photo 7" loading="lazy" />
+      <div class="card-body">
+        <span class="badge photo">Photo véhicule</span>
+        <span class="badge highlight">highlight</span>
+        <div class="label">Aspect général — Point fort</div>
+        <div class="meta">
+          <span>Confidence: <b>20%</b></span>
+          <span>Mots: <b>8</b></span>
+          <span>OCR: <b>220ms</b></span>
+        </div>
+        <div class="ocr-text">CSS Harmand-senchoT
+Facture néf2MioH0188 T-
+ES AE" OUR</div>
+      </div>
+    </div>
+    
+    <div class="card photo">
+      <img src="https://img-pa.auto1.com/imgf2/51/f251ce9c89a152c7aecdaa2f474008fc/pa/VM79011_59f402957260337eec6a59ba42db307c.jpg" alt="Photo 8" loading="lazy" />
+      <div class="card-body">
+        <span class="badge photo">Photo véhicule</span>
+        <span class="badge highlight">highlight</span>
+        <div class="label">Aspect général — Point fort</div>
+        <div class="meta">
+          <span>Confidence: <b>24%</b></span>
+          <span>Mots: <b>35</b></span>
+          <span>OCR: <b>288ms</b></span>
+        </div>
+        <div class="ocr-text">X 27 ; 9
+â $ = î
+pauihé F.._ —=&lt; a É ca votre
+se, 155 PE. —=re ESS
+ca PS À y/ Ÿ AS UE
+-2ut: À) NV.
+— Rs, hrs ; -></div>
+      </div>
+    </div>
+    
+    <div class="card photo">
+      <img src="https://img-pa.auto1.com/imgf2/51/f251ce9c89a152c7aecdaa2f474008fc/pa/VM79011_e4b28e05eab9e2de576b419e742ab8bd.jpg" alt="Photo 9" loading="lazy" />
+      <div class="card-body">
+        <span class="badge photo">Photo véhicule</span>
+        <span class="badge highlight">highlight</span>
+        <div class="label">Aspect général — Point fort</div>
+        <div class="meta">
+          <span>Confidence: <b>27%</b></span>
+          <span>Mots: <b>45</b></span>
+          <span>OCR: <b>299ms</b></span>
+        </div>
+        <div class="ocr-text">&lt;&lt; acts) tits oies Z II ë
+de 0 due dc Mt
+; tavétcs formation init de imérour Gt:
+A | mére d'immaticulation: rase Datant du 2/02/2026 l au.
+
+3 ;
+
+SFA) Ve res] (rte mac” (eine) vaine
+
+Historique des opérations on France
+
+= _.</div>
+      </div>
+    </div>
+    
+    <div class="card photo">
+      <img src="https://img-pa.auto1.com/imgf2/51/f251ce9c89a152c7aecdaa2f474008fc/pa/VM79011_f827fc21c2985dfa35d07c6b93cac689.jpg" alt="Photo 10" loading="lazy" />
+      <div class="card-body">
+        <span class="badge photo">Photo véhicule</span>
+        <span class="badge highlight">highlight</span>
+        <div class="label">Aspect général — Point fort</div>
+        <div class="meta">
+          <span>Confidence: <b>29%</b></span>
+          <span>Mots: <b>55</b></span>
+          <span>OCR: <b>339ms</b></span>
+        </div>
+        <div class="ocr-text">|| LE ee /
+[Fa
+N A; / }
+D ‘ {| % i I
+| nn v jf ër 48
+A PC ÿ j
+am», Æ 1
+th @ _ “8
+CB ‘ Beur/
+54 N P 9 / À ÿ -
+PESTE £ T A > = PP ss vdi /4 VV 99</div>
+      </div>
+    </div>
+    
+    <div class="card photo">
+      <img src="https://img-pa.auto1.com/imgf2/51/f251ce9c89a152c7aecdaa2f474008fc/pa/VM79011_16e58c1c03d1c1cb3c6ca0236c261369.jpg" alt="Photo 11" loading="lazy" />
+      <div class="card-body">
+        <span class="badge photo">Photo véhicule</span>
+        <span class="badge highlight">highlight</span>
+        <div class="label">Aspect général — Point fort</div>
+        <div class="meta">
+          <span>Confidence: <b>61%</b></span>
+          <span>Mots: <b>8</b></span>
+          <span>OCR: <b>174ms</b></span>
+        </div>
+        <div class="ocr-text">Sa Garage Chany ê
+| | SE
+——</div>
+      </div>
+    </div>
+    
+    <div class="card photo">
+      <img src="https://img-pa.auto1.com/imgf2/51/f251ce9c89a152c7aecdaa2f474008fc/pa/VM79011_5a24c269926b53cdfd2deb2b1188e1c4.jpg" alt="Photo 12" loading="lazy" />
+      <div class="card-body">
+        <span class="badge photo">Photo véhicule</span>
+        <span class="badge highlight">highlight</span>
+        <div class="label">Aspect général — Point fort</div>
+        <div class="meta">
+          <span>Confidence: <b>43%</b></span>
+          <span>Mots: <b>28</b></span>
+          <span>OCR: <b>219ms</b></span>
+        </div>
+        <div class="ocr-text">n w ii ToFr 5 75008
+- | tovéhiculo Informations du Ministère de l'Intériour -
+k
+Contrôles techniques
+évier]
+G utilisez maintenant l'application officioile simplimmat =
+: om</div>
+      </div>
+    </div>
+    
+    <div class="card photo">
+      <img src="https://img-pa.auto1.com/imgf2/51/f251ce9c89a152c7aecdaa2f474008fc/pa/VM79011_502f30009bb0c2599e9ecbdc4883ccaf.jpg" alt="Photo 13" loading="lazy" />
+      <div class="card-body">
+        <span class="badge photo">Photo véhicule</span>
+        <span class="badge highlight">highlight</span>
+        <div class="label">Aspect général — Point fort</div>
+        <div class="meta">
+          <span>Confidence: <b>36%</b></span>
+          <span>Mots: <b>58</b></span>
+          <span>OCR: <b>367ms</b></span>
+        </div>
+        <div class="ocr-text">Ne
+z
+“ /
+A
+- ; : — 2 TE )
+\
+— = = — pers) pa S 7, AN
+A HE > à ‘
+p a = Gi, © 9; , 4 d
+4 LA DL BATIR SE a 4—/
+6 9-44, CSA
+\ AE 5e, = eee ,
+eee € D r®
+\ =</div>
+      </div>
+    </div>
+    
+    <div class="card photo">
+      <img src="https://img-pa.auto1.com/imgf2/51/f251ce9c89a152c7aecdaa2f474008fc/pa/VM79011_a7830071308f5eb9374b1c672b309ac6.jpg" alt="Photo 14" loading="lazy" />
+      <div class="card-body">
+        <span class="badge photo">Photo véhicule</span>
+        <span class="badge highlight">highlight</span>
+        <div class="label">Aspect général — Point fort</div>
+        <div class="meta">
+          <span>Confidence: <b>34%</b></span>
+          <span>Mots: <b>25</b></span>
+          <span>OCR: <b>276ms</b></span>
+        </div>
+        <div class="ocr-text">» » _————; = >>>
+à EPS
+ère IL 4 j 4 ÿ
+ea mé | ; 44 P
+| — 5 V ; 5</div>
+      </div>
+    </div>
+    
+    <div class="card photo">
+      <img src="https://img-pa.auto1.com/imgf2/51/f251ce9c89a152c7aecdaa2f474008fc/pa/VM79011_8e0f85e26553a897d739ee665c746d9e.jpg" alt="Photo 15" loading="lazy" />
+      <div class="card-body">
+        <span class="badge photo">Photo véhicule</span>
+        <span class="badge highlight">highlight</span>
+        <div class="label">Aspect général — Point fort</div>
+        <div class="meta">
+          <span>Confidence: <b>35%</b></span>
+          <span>Mots: <b>4</b></span>
+          <span>OCR: <b>213ms</b></span>
+        </div>
+        <div class="ocr-text">ë PE etes .</div>
+      </div>
+    </div>
+    
+    <div class="card photo">
+      <img src="https://img-pa.auto1.com/imgf2/51/f251ce9c89a152c7aecdaa2f474008fc/pa/VM79011_00227f5f7992ae58fd677bcfcb94a809.jpg" alt="Photo 16" loading="lazy" />
+      <div class="card-body">
+        <span class="badge photo">Photo véhicule</span>
+        <span class="badge highlight">highlight</span>
+        <div class="label">Aspect général — Point fort</div>
+        <div class="meta">
+          <span>Confidence: <b>0%</b></span>
+          <span>Mots: <b>0</b></span>
+          <span>OCR: <b>151ms</b></span>
+        </div>
+        <div class="ocr-text" style="color:#475569">Aucun texte détecté</div>
+      </div>
+    </div>
+    
+    <div class="card document">
+      <img src="https://img-pa.auto1.com/imgf2/51/f251ce9c89a152c7aecdaa2f474008fc/pa/VM79011_7e5318a28ca98e1eedfc2060eee9f07b.jpg" alt="Photo 17" loading="lazy" />
+      <div class="card-body">
+        <span class="badge document">Document</span>
+        <span class="badge highlight">highlight</span>
+        <div class="label">Aspect général — Point fort</div>
+        <div class="meta">
+          <span>Confidence: <b>54%</b></span>
+          <span>Mots: <b>20</b></span>
+          <span>OCR: <b>193ms</b></span>
+        </div>
+        <div class="ocr-text">aim Mistrative disponible sur le site de FANTS fait fai. Veuillez nous excuser pour.
+= CNED 8 SE 0m 6</div>
+      </div>
+    </div>
+    
+  </div>
+</body>
+</html>

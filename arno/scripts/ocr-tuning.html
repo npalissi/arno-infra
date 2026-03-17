@@ -1,0 +1,1083 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OCR Tuning — VM79011</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f172a; color: #e2e8f0; padding: 24px; }
+    h1 { font-size: 24px; margin-bottom: 8px; }
+    .subtitle { color: #94a3b8; margin-bottom: 24px; font-size: 14px; }
+    .stats { display: flex; gap: 12px; margin-bottom: 32px; flex-wrap: wrap; }
+    .stat { background: #1e293b; border-radius: 12px; padding: 14px 18px; min-width: 100px; }
+    .stat-value { font-size: 24px; font-weight: 700; }
+    .stat-label { font-size: 11px; color: #94a3b8; margin-top: 4px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); gap: 16px; }
+    .card { background: #1e293b; border-radius: 12px; overflow: hidden; border: 3px solid transparent; }
+    .card.document { border-color: #f59e0b; }
+    .card.photo { border-color: #22c55e; }
+    .card img { width: 100%; height: 240px; object-fit: cover; }
+    .card-body { padding: 16px; }
+    .badges { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+    .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+    .badge.document { background: #f59e0b20; color: #f59e0b; }
+    .badge.photo { background: #22c55e20; color: #22c55e; }
+    .badge.gallery { background: #3b82f620; color: #3b82f6; }
+    .badge.highlight { background: #a855f720; color: #a855f7; }
+    .badge.damage { background: #ef444420; color: #ef4444; }
+    .reason { font-size: 12px; color: #fbbf24; margin: 6px 0; font-style: italic; }
+    .metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0; }
+    .metric-group { background: #0f172a; border-radius: 8px; padding: 10px; }
+    .metric-group h4 { font-size: 11px; color: #64748b; margin-bottom: 6px; text-transform: uppercase; }
+    .metric-row { display: flex; justify-content: space-between; font-size: 12px; padding: 2px 0; }
+    .metric-row .val { font-weight: 600; }
+    .metric-row .val.high { color: #22c55e; }
+    .metric-row .val.medium { color: #f59e0b; }
+    .metric-row .val.low { color: #ef4444; }
+    .ocr-text { font-size: 11px; color: #64748b; background: #0f172a; padding: 8px 12px; border-radius: 8px; max-height: 80px; overflow-y: auto; margin-top: 8px; white-space: pre-wrap; word-break: break-all; font-family: monospace; }
+    .label { font-size: 13px; color: #cbd5e1; }
+    .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+    .compare h5 { font-size: 10px; color: #64748b; margin-bottom: 4px; text-transform: uppercase; }
+  </style>
+</head>
+<body>
+  <h1>OCR Tuning — VM79011</h1>
+  <p class="subtitle">Peugeot ? — 17 photos | OCR brut vs prétraité (grayscale+normalize+sharpen) | Analyse couleur sharp</p>
+
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-value">17</div>
+      <div class="stat-label">Photos</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value" style="color:#22c55e">13</div>
+      <div class="stat-label">Photos véhicule</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value" style="color:#f59e0b">4</div>
+      <div class="stat-label">Documents</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">10s</div>
+      <div class="stat-label">Temps total</div>
+    </div>
+  </div>
+
+  <div class="grid">
+    
+    <div class="card photo">
+      <img src="https://img-pa.auto1.com/imgf2/51/f251ce9c89a152c7aecdaa2f474008fc/pa/VM79011_d97c3441af2c6cc5e0a61b386cce96ba.jpg" alt="Photo 1" loading="lazy" />
+      <div class="card-body">
+        <div class="badges">
+          <span class="badge photo">Photo véhicule</span>
+          <span class="badge gallery">gallery</span>
+        </div>
+        <div class="label">Galerie</div>
+        <div class="reason">Photo (37 mots, lum:106, var:66)</div>
+        <div class="metrics">
+          <div class="metric-group">
+            <h4>OCR Brut</h4>
+            <div class="metric-row"><span>Confidence</span><span class="val low">23%</span></div>
+            <div class="metric-row"><span>Mots</span><span class="val">37</span></div>
+            <div class="metric-row"><span>Temps</span><span class="val">374ms</span></div>
+          </div>
+          <div class="metric-group">
+            <h4>OCR Prétraité</h4>
+            <div class="metric-row"><span>Confidence</span><span class="val low">21%</span></div>
+            <div class="metric-row"><span>Mots</span><span class="val">28</span></div>
+            <div class="metric-row"><span>Temps</span><span class="val">306ms</span></div>
+          </div>
+        </div>
+        <div class="metrics">
+          <div class="metric-group">
+            <h4>Analyse Image</h4>
+            <div class="metric-row"><span>Luminosité</span><span class="val">106</span></div>
+            <div class="metric-row"><span>Variance couleur</span><span class="val">66</span></div>
+          </div>
+          <div class="metric-group">
+            <h4>Flags</h4>
+            <div class="metric-row"><span>Fond clair</span><span class="val">❌</span></div>
+            <div class="metric-row"><span>Uniforme</span><span class="val">❌</span></div>
+          </div>
+        </div>
+        <div class="compare">
+          <div>
+            <h5>Texte brut</h5>
+            <div class="ocr-text">| } OPTION Mn)
+Sn 3e 78) >
+
+ES s…
+
+A: usé
+VS ÿ
+Ne 65
+— D>> Ré 7 #
+>> Ss 5 5 >
+2 4 É : - P- = sise,
+Ë ;=—=. Fr.</div>
+          </div>
+          <div>
+            <h5>Texte prétraité</h5>
+            <div class="ocr-text">(11 gel TR” 7/00 /70 %
+7 67 7
+>; É, 7 _
+en $/ ÿ
+= A
+7 HZ 5
+a -_—— ur
+us ae Es VE</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card photo">
+      <img src="https://img-pa.auto1.com/imgf2/51/f251ce9c89a152c7aecdaa2f474008fc/pa/VM79011_52da50a5c0930eda867f1c90aa03257d.jpg" alt="Photo 2" loading="lazy" />
+      <div class="card-body">
+        <div class="badges">
+          <span class="badge photo">Photo véhicule</span>
+          <span class="badge gallery">gallery</span>
+        </div>
+        <div class="label">Galerie</div>
+        <div class="reason">Photo (58 mots, lum:103, var:62)</div>
+        <div class="metrics">
+          <div class="metric-group">
+            <h4>OCR Brut</h4>
+            <div class="metric-row"><span>Confidence</span><span class="val low">29%</span></div>
+            <div class="metric-row"><span>Mots</span><span class="val">58</span></div>
+            <div class="metric-row"><span>Temps</span><span class="val">469ms</span></div>
+          </div>
+          <div class="metric-group">
+            <h4>OCR Prétraité</h4>
+            <div class="metric-row"><span>Confidence</span><span class="val low">25%</span></div>
+            <div class="metric-row"><span>Mots</span><span class="val">50</span></div>
+            <div class="metric-row"><span>Temps</span><span class="val">347ms</span></div>
+          </div>
+        </div>
+        <div class="metrics">
+          <div class="metric-group">
+            <h4>Analyse Image</h4>
+            <div class="metric-row"><span>Luminosité</span><span class="val">103</span></div>
+            <div class="metric-row"><span>Variance couleur</span><span class="val">62</span></div>
+          </div>
+          <div class="metric-group">
+            <h4>Flags</h4>
+            <div class="metric-row"><span>Fond clair</span><span class="val">❌</span></div>
+            <div class="metric-row"><span>Uniforme</span><span class="val">❌</span></div>
+          </div>
+        </div>
+        <div class="compare">
+          <div>
+            <h5>Texte brut</h5>
+            <div class="ocr-text">mm 1 te FA ë
+= ee. A :
+eu À p - pro
+EE 7
+1 re,
+09 42 \ » 07
+ÿ pe D OT)
+Pi SN
+3 JE Ka “24 ss)
+E ÿ
+S ce d = 4 > y
+‘2 x
+- 3 F p- —_
+M ee, 14e es
+a, >-- 2 vues</div>
+          </div>
+          <div>
+            <h5>Texte prétraité</h5>
+            <div class="ocr-text">mme 2 À ‘ ÿ
+À — ==
+2 (es pa 7/ ; NEA) ==
+om, Æ a, / fn = Sn A = JE
+0 1 2 NN
+A7 À
+Eu ue Le 225 - É ÿ
+‘ ? 9 ‘ E
+a pe A 3 : Ë "</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card photo">
+      <img src="https://img-pa.auto1.com/imgf2/51/f251ce9c89a152c7aecdaa2f474008fc/pa/VM79011_522a173bdbfb4fc8fd7e1b8788c83c4c.jpg" alt="Photo 3" loading="lazy" />
+      <div class="card-body">
+        <div class="badges">
+          <span class="badge photo">Photo véhicule</span>
+          <span class="badge gallery">gallery</span>
+        </div>
+        <div class="label">Galerie</div>
+        <div class="reason">Photo (12 mots, lum:61, var:58)</div>
+        <div class="metrics">
+          <div class="metric-group">
+            <h4>OCR Brut</h4>
+            <div class="metric-row"><span>Confidence</span><span class="val medium">40%</span></div>
+            <div class="metric-row"><span>Mots</span><span class="val">12</span></div>
+            <div class="metric-row"><span>Temps</span><span class="val">188ms</span></div>
+          </div>
+          <div class="metric-group">
+            <h4>OCR Prétraité</h4>
+            <div class="metric-row"><span>Confidence</span><span class="val medium">32%</span></div>
+            <div class="metric-row"><span>Mots</span><span class="val">36</span></div>
+            <div class="metric-row"><span>Temps</span><span class="val">279ms</span></div>
+          </div>
+        </div>
+        <div class="metrics">
+          <div class="metric-group">
+            <h4>Analyse Image</h4>
+            <div class="metric-row"><span>Luminosité</span><span class="val">61</span></div>
+            <div class="metric-row"><span>Variance couleur</span><span class="val">58</span></div>
+          </div>
+          <div class="metric-group">
+            <h4>Flags</h4>
+            <div class="metric-row"><span>Fond clair</span><span class="val">❌</span></div>
+            <div class="metric-row"><span>Uniforme</span><span class="val">❌</span></div>
+          </div>
+        </div>
+        <div class="compare">
+          <div>
+            <h5>Texte brut</h5>
+            <div class="ocr-text">;
+
+N _ Ve. | Û
+= V5 pe |
+s y</div>
+          </div>
+          <div>
+            <h5>Texte prétraité</h5>
+            <div class="ocr-text">arr Ne >
+= ss = =
+SDS zu
+& Ç r3 Se V4.
+ice >.
+—— 78
+GS
+SN » ) , [
+> «,
+— ; 5 ‘ 7 =
+ee; Na
+PE à</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card photo">
+      <img src="https://img-pa.auto1.com/imgf2/51/f251ce9c89a152c7aecdaa2f474008fc/pa/VM79011_0464c7d6a6413425c3801be9e9fd4dcb.jpg" alt="Photo 4" loading="lazy" />
+      <div class="card-body">
+        <div class="badges">
+          <span class="badge photo">Photo véhicule</span>
+          <span class="badge gallery">gallery</span>
+        </div>
+        <div class="label">Galerie</div>
+        <div class="reason">Photo (53 mots, lum:77, var:58)</div>
+        <div class="metrics">
+          <div class="metric-group">
+            <h4>OCR Brut</h4>
+            <div class="metric-row"><span>Confidence</span><span class="val low">29%</span></div>
+            <div class="metric-row"><span>Mots</span><span class="val">53</span></div>
+            <div class="metric-row"><span>Temps</span><span class="val">396ms</span></div>
+          </div>
+          <div class="metric-group">
+            <h4>OCR Prétraité</h4>
+            <div class="metric-row"><span>Confidence</span><span class="val low">25%</span></div>
+            <div class="metric-row"><span>Mots</span><span class="val">33</span></div>
+            <div class="metric-row"><span>Temps</span><span class="val">266ms</span></div>
+          </div>
+        </div>
+        <div class="metrics">
+          <div class="metric-group">
+            <h4>Analyse Image</h4>
+            <div class="metric-row"><span>Luminosité</span><span class="val">77</span></div>
+            <div class="metric-row"><span>Variance couleur</span><span class="val">58</span></div>
+          </div>
+          <div class="metric-group">
+            <h4>Flags</h4>
+            <div class="metric-row"><span>Fond clair</span><span class="val">❌</span></div>
+            <div class="metric-row"><span>Uniforme</span><span class="val">❌</span></div>
+          </div>
+        </div>
+        <div class="compare">
+          <div>
+            <h5>Texte brut</h5>
+            <div class="ocr-text">= A eu ue
+
+NE 4-1 = me
+
+a, 3% ne de Le de
+8 —— - ES
+
+pr” = ; —— =
+
+/ 4}; 0. 6 À
+‘ à Pi PES e P = F
+aee)"-- 93
+à _ ae, es és >;
+
+p > Q ;
+—2008 vie 357 it —</div>
+          </div>
+          <div>
+            <h5>Texte prétraité</h5>
+            <div class="ocr-text">= 2 —IN2 0; ; ==} A T
+ee, 3 d ‘ 135 ; ve
+É ESS 0. TriT = sé =
+
+N 0. »
+Can © 03) 4)
+v—727 grrr LL —</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card document">
+      <img src="https://img-pa.auto1.com/imgf2/51/f251ce9c89a152c7aecdaa2f474008fc/pa/VM79011_782715f5da359514f0a9e3db09145594.jpg" alt="Photo 5" loading="lazy" />
+      <div class="card-body">
+        <div class="badges">
+          <span class="badge document">Document</span>
+          <span class="badge gallery">gallery</span>
+        </div>
+        <div class="label">Galerie</div>
+        <div class="reason">Texte + fond clair uniforme (lum:170, var:41)</div>
+        <div class="metrics">
+          <div class="metric-group">
+            <h4>OCR Brut</h4>
+            <div class="metric-row"><span>Confidence</span><span class="val low">16%</span></div>
+            <div class="metric-row"><span>Mots</span><span class="val">32</span></div>
+            <div class="metric-row"><span>Temps</span><span class="val">496ms</span></div>
+          </div>
+          <div class="metric-group">
+            <h4>OCR Prétraité</h4>
+            <div class="metric-row"><span>Confidence</span><span class="val low">20%</span></div>
+            <div class="metric-row"><span>Mots</span><span class="val">53</span></div>
+            <div class="metric-row"><span>Temps</span><span class="val">631ms</span></div>
+          </div>
+        </div>
+        <div class="metrics">
+          <div class="metric-group">
+            <h4>Analyse Image</h4>
+            <div class="metric-row"><span>Luminosité</span><span class="val">170</span></div>
+            <div class="metric-row"><span>Variance couleur</span><span class="val">41</span></div>
+          </div>
+          <div class="metric-group">
+            <h4>Flags</h4>
+            <div class="metric-row"><span>Fond clair</span><span class="val">✅</span></div>
+            <div class="metric-row"><span>Uniforme</span><span class="val">✅</span></div>
+          </div>
+        </div>
+        <div class="compare">
+          <div>
+            <h5>Texte brut</h5>
+            <div class="ocr-text">a =
+a #. _ 921 _M10PGTVPO71P647 =,
+BDs. =... ue … = =
+E. ss Qt OsOIï! ss.
+Lu. een à
+qe à s
+0°... gg uwst ss)
+se sn iris</div>
+          </div>
+          <div>
+            <h5>Texte prétraité</h5>
+            <div class="ocr-text">> Par mr Àà =
+2: coup = ; Ce …-.
+ss. MAL MI OPéTVpomiee
+fi 10 — > 8. ...
+; ; . ss. es mt
+|. 8e ee ss |
+€ eos eus: °, , OO ,ÿ
+Are ee 1
+sn ss PTS ss
+b:. QU nn ss
+1 ss ee</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card document">
+      <img src="https://img-pa.auto1.com/imgf2/51/f251ce9c89a152c7aecdaa2f474008fc/pa/VM79011_b97da05e667c643abb5cef43b24073f6.jpg" alt="Photo 6" loading="lazy" />
+      <div class="card-body">
+        <div class="badges">
+          <span class="badge document">Document</span>
+          <span class="badge gallery">gallery</span>
+        </div>
+        <div class="label">Galerie</div>
+        <div class="reason">Beaucoup de texte (22 mots, 58% conf)</div>
+        <div class="metrics">
+          <div class="metric-group">
+            <h4>OCR Brut</h4>
+            <div class="metric-row"><span>Confidence</span><span class="val medium">35%</span></div>
+            <div class="metric-row"><span>Mots</span><span class="val">48</span></div>
+            <div class="metric-row"><span>Temps</span><span class="val">308ms</span></div>
+          </div>
+          <div class="metric-group">
+            <h4>OCR Prétraité</h4>
+            <div class="metric-row"><span>Confidence</span><span class="val high">58%</span></div>
+            <div class="metric-row"><span>Mots</span><span class="val">22</span></div>
+            <div class="metric-row"><span>Temps</span><span class="val">215ms</span></div>
+          </div>
+        </div>
+        <div class="metrics">
+          <div class="metric-group">
+            <h4>Analyse Image</h4>
+            <div class="metric-row"><span>Luminosité</span><span class="val">162</span></div>
+            <div class="metric-row"><span>Variance couleur</span><span class="val">40</span></div>
+          </div>
+          <div class="metric-group">
+            <h4>Flags</h4>
+            <div class="metric-row"><span>Fond clair</span><span class="val">✅</span></div>
+            <div class="metric-row"><span>Uniforme</span><span class="val">✅</span></div>
+          </div>
+        </div>
+        <div class="compare">
+          <div>
+            <h5>Texte brut</h5>
+            <div class="ocr-text">lagénecccasionnée "9% 68 VANTS fit fol Vouilez nous excuser pour
+Levi tone doi
+ss 1110000
+Fan | IE AE ct ae pese es
+Résumé
+moi .
+Shui insvave
+| an
+Ste crée (gages, opposition, vo.)
+&lt;2D ‘Elle simples o</div>
+          </div>
+          <div>
+            <h5>Texte prétraité</h5>
+            <div class="ocr-text">ss. 1100
+Résumé
+cena at sages, opposition, vol
+Vous êtes le 3° titulaire de ca véhicule, be à 5
+
+simplimmat votre déncule,</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card photo">
+      <img src="https://img-pa.auto1.com/imgf2/51/f251ce9c89a152c7aecdaa2f474008fc/pa/VM79011_b4532dfac35e37d82c555ed746ca46a3.jpg" alt="Photo 7" loading="lazy" />
+      <div class="card-body">
+        <div class="badges">
+          <span class="badge photo">Photo véhicule</span>
+          <span class="badge highlight">highlight</span>
+        </div>
+        <div class="label">Aspect général — Point fort</div>
+        <div class="reason">Photo (16 mots, lum:124, var:88)</div>
+        <div class="metrics">
+          <div class="metric-group">
+            <h4>OCR Brut</h4>
+            <div class="metric-row"><span>Confidence</span><span class="val low">20%</span></div>
+            <div class="metric-row"><span>Mots</span><span class="val">8</span></div>
+            <div class="metric-row"><span>Temps</span><span class="val">192ms</span></div>
+          </div>
+          <div class="metric-group">
+            <h4>OCR Prétraité</h4>
+            <div class="metric-row"><span>Confidence</span><span class="val high">54%</span></div>
+            <div class="metric-row"><span>Mots</span><span class="val">16</span></div>
+            <div class="metric-row"><span>Temps</span><span class="val">208ms</span></div>
+          </div>
+        </div>
+        <div class="metrics">
+          <div class="metric-group">
+            <h4>Analyse Image</h4>
+            <div class="metric-row"><span>Luminosité</span><span class="val">124</span></div>
+            <div class="metric-row"><span>Variance couleur</span><span class="val">88</span></div>
+          </div>
+          <div class="metric-group">
+            <h4>Flags</h4>
+            <div class="metric-row"><span>Fond clair</span><span class="val">❌</span></div>
+            <div class="metric-row"><span>Uniforme</span><span class="val">❌</span></div>
+          </div>
+        </div>
+        <div class="compare">
+          <div>
+            <h5>Texte brut</h5>
+            <div class="ocr-text">CSS Harmand-senchoT
+Facture néf2MioH0188 T-
+ES AE" OUR</div>
+          </div>
+          <div>
+            <h5>Texte prétraité</h5>
+            <div class="ocr-text">S CARROSSERIE ET
+4 D GARAGE axesur.
+| Rome A
+| |
+| |
+|
+a)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card photo">
+      <img src="https://img-pa.auto1.com/imgf2/51/f251ce9c89a152c7aecdaa2f474008fc/pa/VM79011_59f402957260337eec6a59ba42db307c.jpg" alt="Photo 8" loading="lazy" />
+      <div class="card-body">
+        <div class="badges">
+          <span class="badge photo">Photo véhicule</span>
+          <span class="badge highlight">highlight</span>
+        </div>
+        <div class="label">Aspect général — Point fort</div>
+        <div class="reason">Photo (41 mots, lum:89, var:62)</div>
+        <div class="metrics">
+          <div class="metric-group">
+            <h4>OCR Brut</h4>
+            <div class="metric-row"><span>Confidence</span><span class="val low">24%</span></div>
+            <div class="metric-row"><span>Mots</span><span class="val">35</span></div>
+            <div class="metric-row"><span>Temps</span><span class="val">277ms</span></div>
+          </div>
+          <div class="metric-group">
+            <h4>OCR Prétraité</h4>
+            <div class="metric-row"><span>Confidence</span><span class="val low">28%</span></div>
+            <div class="metric-row"><span>Mots</span><span class="val">41</span></div>
+            <div class="metric-row"><span>Temps</span><span class="val">292ms</span></div>
+          </div>
+        </div>
+        <div class="metrics">
+          <div class="metric-group">
+            <h4>Analyse Image</h4>
+            <div class="metric-row"><span>Luminosité</span><span class="val">89</span></div>
+            <div class="metric-row"><span>Variance couleur</span><span class="val">62</span></div>
+          </div>
+          <div class="metric-group">
+            <h4>Flags</h4>
+            <div class="metric-row"><span>Fond clair</span><span class="val">❌</span></div>
+            <div class="metric-row"><span>Uniforme</span><span class="val">❌</span></div>
+          </div>
+        </div>
+        <div class="compare">
+          <div>
+            <h5>Texte brut</h5>
+            <div class="ocr-text">X 27 ; 9
+â $ = î
+pauihé F.._ —=&lt; a É ca votre
+se, 155 PE. —=re ESS
+ca PS À y/ Ÿ AS UE
+-2ut: À) NV.
+— Rs, hrs ; -></div>
+          </div>
+          <div>
+            <h5>Texte prétraité</h5>
+            <div class="ocr-text">AN |
+& w q # so
+> -— 2 ê F &lt;&lt;
+asscocossososaus ue " = /
+pau = \8 =2 = À ( ri
+sut. A) Nc
+air 46 A.
+———=/l fo % ; "6
+ass NS | (A</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card document">
+      <img src="https://img-pa.auto1.com/imgf2/51/f251ce9c89a152c7aecdaa2f474008fc/pa/VM79011_e4b28e05eab9e2de576b419e742ab8bd.jpg" alt="Photo 9" loading="lazy" />
+      <div class="card-body">
+        <div class="badges">
+          <span class="badge document">Document</span>
+          <span class="badge highlight">highlight</span>
+        </div>
+        <div class="label">Aspect général — Point fort</div>
+        <div class="reason">Fond document (lum:155, var:49) + texte</div>
+        <div class="metrics">
+          <div class="metric-group">
+            <h4>OCR Brut</h4>
+            <div class="metric-row"><span>Confidence</span><span class="val low">27%</span></div>
+            <div class="metric-row"><span>Mots</span><span class="val">45</span></div>
+            <div class="metric-row"><span>Temps</span><span class="val">370ms</span></div>
+          </div>
+          <div class="metric-group">
+            <h4>OCR Prétraité</h4>
+            <div class="metric-row"><span>Confidence</span><span class="val low">29%</span></div>
+            <div class="metric-row"><span>Mots</span><span class="val">10</span></div>
+            <div class="metric-row"><span>Temps</span><span class="val">222ms</span></div>
+          </div>
+        </div>
+        <div class="metrics">
+          <div class="metric-group">
+            <h4>Analyse Image</h4>
+            <div class="metric-row"><span>Luminosité</span><span class="val">155</span></div>
+            <div class="metric-row"><span>Variance couleur</span><span class="val">49</span></div>
+          </div>
+          <div class="metric-group">
+            <h4>Flags</h4>
+            <div class="metric-row"><span>Fond clair</span><span class="val">✅</span></div>
+            <div class="metric-row"><span>Uniforme</span><span class="val">✅</span></div>
+          </div>
+        </div>
+        <div class="compare">
+          <div>
+            <h5>Texte brut</h5>
+            <div class="ocr-text">&lt;&lt; acts) tits oies Z II ë
+de 0 due dc Mt
+; tavétcs formation init de imérour Gt:
+A | mére d'immaticulation: rase Datant du 2/02/2026 l au.
+
+3 ;
+
+SFA) Ve res] (rte mac” (eine) vaine
+
+Historique des opé</div>
+          </div>
+          <div>
+            <h5>Texte prétraité</h5>
+            <div class="ocr-text">M érosion.
+è
+= CES ie 5 5 0m C</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card photo">
+      <img src="https://img-pa.auto1.com/imgf2/51/f251ce9c89a152c7aecdaa2f474008fc/pa/VM79011_f827fc21c2985dfa35d07c6b93cac689.jpg" alt="Photo 10" loading="lazy" />
+      <div class="card-body">
+        <div class="badges">
+          <span class="badge photo">Photo véhicule</span>
+          <span class="badge highlight">highlight</span>
+        </div>
+        <div class="label">Aspect général — Point fort</div>
+        <div class="reason">Photo (60 mots, lum:61, var:48)</div>
+        <div class="metrics">
+          <div class="metric-group">
+            <h4>OCR Brut</h4>
+            <div class="metric-row"><span>Confidence</span><span class="val low">29%</span></div>
+            <div class="metric-row"><span>Mots</span><span class="val">55</span></div>
+            <div class="metric-row"><span>Temps</span><span class="val">421ms</span></div>
+          </div>
+          <div class="metric-group">
+            <h4>OCR Prétraité</h4>
+            <div class="metric-row"><span>Confidence</span><span class="val medium">38%</span></div>
+            <div class="metric-row"><span>Mots</span><span class="val">60</span></div>
+            <div class="metric-row"><span>Temps</span><span class="val">353ms</span></div>
+          </div>
+        </div>
+        <div class="metrics">
+          <div class="metric-group">
+            <h4>Analyse Image</h4>
+            <div class="metric-row"><span>Luminosité</span><span class="val">61</span></div>
+            <div class="metric-row"><span>Variance couleur</span><span class="val">48</span></div>
+          </div>
+          <div class="metric-group">
+            <h4>Flags</h4>
+            <div class="metric-row"><span>Fond clair</span><span class="val">❌</span></div>
+            <div class="metric-row"><span>Uniforme</span><span class="val">✅</span></div>
+          </div>
+        </div>
+        <div class="compare">
+          <div>
+            <h5>Texte brut</h5>
+            <div class="ocr-text">|| LE ee /
+[Fa
+N A; / }
+D ‘ {| % i I
+| nn v jf ër 48
+A PC ÿ j
+am», Æ 1
+th @ _ “8
+CB ‘ Beur/
+54 N P 9 / À ÿ -
+PESTE £ T A > = PP ss vdi /4 VV 99</div>
+          </div>
+          <div>
+            <h5>Texte prétraité</h5>
+            <div class="ocr-text">|| 14 SN
+| = y!
+W Î ny / i
+> ‘ | 7 | i
+| y j ) ; /n | x
+= EN ‘| a / f
+47m À ; Hi
+= 420 "&lt; ss ; |
+q ” ke | Ë
+> 401
+> É PP sa 256
+a 4 . >; 7 y VA</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card photo">
+      <img src="https://img-pa.auto1.com/imgf2/51/f251ce9c89a152c7aecdaa2f474008fc/pa/VM79011_16e58c1c03d1c1cb3c6ca0236c261369.jpg" alt="Photo 11" loading="lazy" />
+      <div class="card-body">
+        <div class="badges">
+          <span class="badge photo">Photo véhicule</span>
+          <span class="badge highlight">highlight</span>
+        </div>
+        <div class="label">Aspect général — Point fort</div>
+        <div class="reason">Photo (8 mots, lum:117, var:84)</div>
+        <div class="metrics">
+          <div class="metric-group">
+            <h4>OCR Brut</h4>
+            <div class="metric-row"><span>Confidence</span><span class="val high">61%</span></div>
+            <div class="metric-row"><span>Mots</span><span class="val">8</span></div>
+            <div class="metric-row"><span>Temps</span><span class="val">179ms</span></div>
+          </div>
+          <div class="metric-group">
+            <h4>OCR Prétraité</h4>
+            <div class="metric-row"><span>Confidence</span><span class="val medium">43%</span></div>
+            <div class="metric-row"><span>Mots</span><span class="val">9</span></div>
+            <div class="metric-row"><span>Temps</span><span class="val">174ms</span></div>
+          </div>
+        </div>
+        <div class="metrics">
+          <div class="metric-group">
+            <h4>Analyse Image</h4>
+            <div class="metric-row"><span>Luminosité</span><span class="val">117</span></div>
+            <div class="metric-row"><span>Variance couleur</span><span class="val">84</span></div>
+          </div>
+          <div class="metric-group">
+            <h4>Flags</h4>
+            <div class="metric-row"><span>Fond clair</span><span class="val">❌</span></div>
+            <div class="metric-row"><span>Uniforme</span><span class="val">❌</span></div>
+          </div>
+        </div>
+        <div class="compare">
+          <div>
+            <h5>Texte brut</h5>
+            <div class="ocr-text">Sa Garage Chany ê
+| | SE
+——</div>
+          </div>
+          <div>
+            <h5>Texte prétraité</h5>
+            <div class="ocr-text">Sa Garage Champosux-Naigeon E
+TRAVAUX : Œ pe ——</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card document">
+      <img src="https://img-pa.auto1.com/imgf2/51/f251ce9c89a152c7aecdaa2f474008fc/pa/VM79011_5a24c269926b53cdfd2deb2b1188e1c4.jpg" alt="Photo 12" loading="lazy" />
+      <div class="card-body">
+        <div class="badges">
+          <span class="badge document">Document</span>
+          <span class="badge highlight">highlight</span>
+        </div>
+        <div class="label">Aspect général — Point fort</div>
+        <div class="reason">Beaucoup de texte (21 mots, 62% conf)</div>
+        <div class="metrics">
+          <div class="metric-group">
+            <h4>OCR Brut</h4>
+            <div class="metric-row"><span>Confidence</span><span class="val medium">43%</span></div>
+            <div class="metric-row"><span>Mots</span><span class="val">28</span></div>
+            <div class="metric-row"><span>Temps</span><span class="val">213ms</span></div>
+          </div>
+          <div class="metric-group">
+            <h4>OCR Prétraité</h4>
+            <div class="metric-row"><span>Confidence</span><span class="val high">62%</span></div>
+            <div class="metric-row"><span>Mots</span><span class="val">21</span></div>
+            <div class="metric-row"><span>Temps</span><span class="val">191ms</span></div>
+          </div>
+        </div>
+        <div class="metrics">
+          <div class="metric-group">
+            <h4>Analyse Image</h4>
+            <div class="metric-row"><span>Luminosité</span><span class="val">160</span></div>
+            <div class="metric-row"><span>Variance couleur</span><span class="val">54</span></div>
+          </div>
+          <div class="metric-group">
+            <h4>Flags</h4>
+            <div class="metric-row"><span>Fond clair</span><span class="val">✅</span></div>
+            <div class="metric-row"><span>Uniforme</span><span class="val">❌</span></div>
+          </div>
+        </div>
+        <div class="compare">
+          <div>
+            <h5>Texte brut</h5>
+            <div class="ocr-text">n w ii ToFr 5 75008
+- | tovéhiculo Informations du Ministère de l'Intériour -
+k
+Contrôles techniques
+évier]
+G utilisez maintenant l'application officioile simplimmat =
+: om</div>
+          </div>
+          <div>
+            <h5>Texte prétraité</h5>
+            <div class="ocr-text">situation administrative disponibli sur le site de 'ANTS fait foL Veuillez nous excuser pour
+= CEE = 5 5 0m 6</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card photo">
+      <img src="https://img-pa.auto1.com/imgf2/51/f251ce9c89a152c7aecdaa2f474008fc/pa/VM79011_502f30009bb0c2599e9ecbdc4883ccaf.jpg" alt="Photo 13" loading="lazy" />
+      <div class="card-body">
+        <div class="badges">
+          <span class="badge photo">Photo véhicule</span>
+          <span class="badge highlight">highlight</span>
+        </div>
+        <div class="label">Aspect général — Point fort</div>
+        <div class="reason">Photo (58 mots, lum:90, var:62)</div>
+        <div class="metrics">
+          <div class="metric-group">
+            <h4>OCR Brut</h4>
+            <div class="metric-row"><span>Confidence</span><span class="val medium">36%</span></div>
+            <div class="metric-row"><span>Mots</span><span class="val">58</span></div>
+            <div class="metric-row"><span>Temps</span><span class="val">346ms</span></div>
+          </div>
+          <div class="metric-group">
+            <h4>OCR Prétraité</h4>
+            <div class="metric-row"><span>Confidence</span><span class="val low">26%</span></div>
+            <div class="metric-row"><span>Mots</span><span class="val">44</span></div>
+            <div class="metric-row"><span>Temps</span><span class="val">341ms</span></div>
+          </div>
+        </div>
+        <div class="metrics">
+          <div class="metric-group">
+            <h4>Analyse Image</h4>
+            <div class="metric-row"><span>Luminosité</span><span class="val">90</span></div>
+            <div class="metric-row"><span>Variance couleur</span><span class="val">62</span></div>
+          </div>
+          <div class="metric-group">
+            <h4>Flags</h4>
+            <div class="metric-row"><span>Fond clair</span><span class="val">❌</span></div>
+            <div class="metric-row"><span>Uniforme</span><span class="val">❌</span></div>
+          </div>
+        </div>
+        <div class="compare">
+          <div>
+            <h5>Texte brut</h5>
+            <div class="ocr-text">Ne
+z
+“ /
+A
+- ; : — 2 TE )
+\
+— = = — pers) pa S 7, AN
+A HE > à ‘
+p a = Gi, © 9; , 4 d
+4 LA DL BATIR SE a 4—/
+6 9-44, CSA
+\ AE 5e, = eee ,
+eee € D r®
+\ =</div>
+          </div>
+          <div>
+            <h5>Texte prétraité</h5>
+            <div class="ocr-text">à T2 ; - :
+a! ÿ
+« __— À
+; — ur -/4
+«(4 2 me nm
+/ ne:
+CE 790% VA
+1409 1° 9e 4)
+4 7 Ti ® ni ÿ
+ef rs, L] a a — /
+es ET À |</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card photo">
+      <img src="https://img-pa.auto1.com/imgf2/51/f251ce9c89a152c7aecdaa2f474008fc/pa/VM79011_a7830071308f5eb9374b1c672b309ac6.jpg" alt="Photo 14" loading="lazy" />
+      <div class="card-body">
+        <div class="badges">
+          <span class="badge photo">Photo véhicule</span>
+          <span class="badge highlight">highlight</span>
+        </div>
+        <div class="label">Aspect général — Point fort</div>
+        <div class="reason">Photo (29 mots, lum:46, var:34)</div>
+        <div class="metrics">
+          <div class="metric-group">
+            <h4>OCR Brut</h4>
+            <div class="metric-row"><span>Confidence</span><span class="val medium">34%</span></div>
+            <div class="metric-row"><span>Mots</span><span class="val">25</span></div>
+            <div class="metric-row"><span>Temps</span><span class="val">260ms</span></div>
+          </div>
+          <div class="metric-group">
+            <h4>OCR Prétraité</h4>
+            <div class="metric-row"><span>Confidence</span><span class="val medium">35%</span></div>
+            <div class="metric-row"><span>Mots</span><span class="val">29</span></div>
+            <div class="metric-row"><span>Temps</span><span class="val">277ms</span></div>
+          </div>
+        </div>
+        <div class="metrics">
+          <div class="metric-group">
+            <h4>Analyse Image</h4>
+            <div class="metric-row"><span>Luminosité</span><span class="val">46</span></div>
+            <div class="metric-row"><span>Variance couleur</span><span class="val">34</span></div>
+          </div>
+          <div class="metric-group">
+            <h4>Flags</h4>
+            <div class="metric-row"><span>Fond clair</span><span class="val">❌</span></div>
+            <div class="metric-row"><span>Uniforme</span><span class="val">✅</span></div>
+          </div>
+        </div>
+        <div class="compare">
+          <div>
+            <h5>Texte brut</h5>
+            <div class="ocr-text">» » _————; = >>>
+à EPS
+ère IL 4 j 4 ÿ
+ea mé | ; 44 P
+| — 5 V ; 5</div>
+          </div>
+          <div>
+            <h5>Texte prétraité</h5>
+            <div class="ocr-text">pue TT 1 2 =
+@ 2 N° { / IR
+i
+v LE / À
+- a : 4 À 4
+ui 4;
+2 74
+É bp
+
+pp</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card photo">
+      <img src="https://img-pa.auto1.com/imgf2/51/f251ce9c89a152c7aecdaa2f474008fc/pa/VM79011_8e0f85e26553a897d739ee665c746d9e.jpg" alt="Photo 15" loading="lazy" />
+      <div class="card-body">
+        <div class="badges">
+          <span class="badge photo">Photo véhicule</span>
+          <span class="badge highlight">highlight</span>
+        </div>
+        <div class="label">Aspect général — Point fort</div>
+        <div class="reason">Photo (4 mots, lum:116, var:86)</div>
+        <div class="metrics">
+          <div class="metric-group">
+            <h4>OCR Brut</h4>
+            <div class="metric-row"><span>Confidence</span><span class="val medium">35%</span></div>
+            <div class="metric-row"><span>Mots</span><span class="val">4</span></div>
+            <div class="metric-row"><span>Temps</span><span class="val">215ms</span></div>
+          </div>
+          <div class="metric-group">
+            <h4>OCR Prétraité</h4>
+            <div class="metric-row"><span>Confidence</span><span class="val low">11%</span></div>
+            <div class="metric-row"><span>Mots</span><span class="val">6</span></div>
+            <div class="metric-row"><span>Temps</span><span class="val">180ms</span></div>
+          </div>
+        </div>
+        <div class="metrics">
+          <div class="metric-group">
+            <h4>Analyse Image</h4>
+            <div class="metric-row"><span>Luminosité</span><span class="val">116</span></div>
+            <div class="metric-row"><span>Variance couleur</span><span class="val">86</span></div>
+          </div>
+          <div class="metric-group">
+            <h4>Flags</h4>
+            <div class="metric-row"><span>Fond clair</span><span class="val">❌</span></div>
+            <div class="metric-row"><span>Uniforme</span><span class="val">❌</span></div>
+          </div>
+        </div>
+        <div class="compare">
+          <div>
+            <h5>Texte brut</h5>
+            <div class="ocr-text">ë PE etes .</div>
+          </div>
+          <div>
+            <h5>Texte prétraité</h5>
+            <div class="ocr-text">LULU 27, “Enonisio
+= s 5)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card photo">
+      <img src="https://img-pa.auto1.com/imgf2/51/f251ce9c89a152c7aecdaa2f474008fc/pa/VM79011_00227f5f7992ae58fd677bcfcb94a809.jpg" alt="Photo 16" loading="lazy" />
+      <div class="card-body">
+        <div class="badges">
+          <span class="badge photo">Photo véhicule</span>
+          <span class="badge highlight">highlight</span>
+        </div>
+        <div class="label">Aspect général — Point fort</div>
+        <div class="reason">Photo (5 mots, lum:115, var:86)</div>
+        <div class="metrics">
+          <div class="metric-group">
+            <h4>OCR Brut</h4>
+            <div class="metric-row"><span>Confidence</span><span class="val low">0%</span></div>
+            <div class="metric-row"><span>Mots</span><span class="val">0</span></div>
+            <div class="metric-row"><span>Temps</span><span class="val">151ms</span></div>
+          </div>
+          <div class="metric-group">
+            <h4>OCR Prétraité</h4>
+            <div class="metric-row"><span>Confidence</span><span class="val low">27%</span></div>
+            <div class="metric-row"><span>Mots</span><span class="val">5</span></div>
+            <div class="metric-row"><span>Temps</span><span class="val">194ms</span></div>
+          </div>
+        </div>
+        <div class="metrics">
+          <div class="metric-group">
+            <h4>Analyse Image</h4>
+            <div class="metric-row"><span>Luminosité</span><span class="val">115</span></div>
+            <div class="metric-row"><span>Variance couleur</span><span class="val">86</span></div>
+          </div>
+          <div class="metric-group">
+            <h4>Flags</h4>
+            <div class="metric-row"><span>Fond clair</span><span class="val">❌</span></div>
+            <div class="metric-row"><span>Uniforme</span><span class="val">❌</span></div>
+          </div>
+        </div>
+        <div class="compare">
+          <div>
+            <h5>Texte brut</h5>
+            <div class="ocr-text">—</div>
+          </div>
+          <div>
+            <h5>Texte prétraité</h5>
+            <div class="ocr-text">; 8
+ee =
+…</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card photo">
+      <img src="https://img-pa.auto1.com/imgf2/51/f251ce9c89a152c7aecdaa2f474008fc/pa/VM79011_7e5318a28ca98e1eedfc2060eee9f07b.jpg" alt="Photo 17" loading="lazy" />
+      <div class="card-body">
+        <div class="badges">
+          <span class="badge photo">Photo véhicule</span>
+          <span class="badge highlight">highlight</span>
+        </div>
+        <div class="label">Aspect général — Point fort</div>
+        <div class="reason">Photo (20 mots, lum:159, var:54)</div>
+        <div class="metrics">
+          <div class="metric-group">
+            <h4>OCR Brut</h4>
+            <div class="metric-row"><span>Confidence</span><span class="val high">54%</span></div>
+            <div class="metric-row"><span>Mots</span><span class="val">20</span></div>
+            <div class="metric-row"><span>Temps</span><span class="val">200ms</span></div>
+          </div>
+          <div class="metric-group">
+            <h4>OCR Prétraité</h4>
+            <div class="metric-row"><span>Confidence</span><span class="val medium">48%</span></div>
+            <div class="metric-row"><span>Mots</span><span class="val">21</span></div>
+            <div class="metric-row"><span>Temps</span><span class="val">206ms</span></div>
+          </div>
+        </div>
+        <div class="metrics">
+          <div class="metric-group">
+            <h4>Analyse Image</h4>
+            <div class="metric-row"><span>Luminosité</span><span class="val">159</span></div>
+            <div class="metric-row"><span>Variance couleur</span><span class="val">54</span></div>
+          </div>
+          <div class="metric-group">
+            <h4>Flags</h4>
+            <div class="metric-row"><span>Fond clair</span><span class="val">✅</span></div>
+            <div class="metric-row"><span>Uniforme</span><span class="val">❌</span></div>
+          </div>
+        </div>
+        <div class="compare">
+          <div>
+            <h5>Texte brut</h5>
+            <div class="ocr-text">aim Mistrative disponible sur le site de FANTS fait fai. Veuillez nous excuser pour.
+= CNED 8 SE 0m 6</div>
+          </div>
+          <div>
+            <h5>Texte prétraité</h5>
+            <div class="ocr-text">ein Aistrative disponible sur [à site de FANTS fait fal, Voulllez nous excusor pour,
+[eme
+= CNED 1 5 50m 6</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
