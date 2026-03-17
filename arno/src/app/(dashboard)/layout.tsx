@@ -72,7 +72,7 @@ export default function DashboardLayout({
       {/* Main content */}
       <main className="flex-1 flex flex-col overflow-hidden">
         {/* Topbar */}
-        <header className="flex h-14 shrink-0 items-center justify-between border-b border-border bg-white/80 px-8 backdrop-blur-sm">
+        <header className="flex h-14 shrink-0 items-center justify-between border-b border-border bg-white/80 px-4 sm:px-6 lg:px-8 backdrop-blur-sm">
           {/* Spacer for mobile menu button */}
           <div className="flex items-center gap-4">
             <div className="w-8 lg:hidden" />
@@ -89,7 +89,7 @@ export default function DashboardLayout({
         </header>
 
         {/* Page content */}
-        <div className="flex-1 overflow-y-auto px-8 py-8">
+        <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
           {children}
         </div>
       </main>

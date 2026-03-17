@@ -89,10 +89,10 @@ export function VehiclesClient({ vehicles }: VehiclesClientProps) {
       </div>
 
       {/* Toolbar */}
-      <div className="flex items-center justify-between rounded-2xl bg-white px-5 py-3 shadow-[var(--shadow-card)]">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-col gap-3 rounded-2xl bg-white px-5 py-3 shadow-[var(--shadow-card)] lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           {/* Search */}
-          <div className="relative w-[280px]">
+          <div className="relative w-full sm:w-[280px]">
             <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <input
               type="text"
@@ -136,7 +136,7 @@ export function VehiclesClient({ vehicles }: VehiclesClientProps) {
           )}
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center justify-between gap-3 sm:justify-end">
           {/* View toggle */}
           <div className="flex rounded-[10px] bg-muted p-1 gap-0.5">
             <button
@@ -180,14 +180,32 @@ export function VehiclesClient({ vehicles }: VehiclesClientProps) {
           ))}
         </div>
       ) : (
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border py-20">
-          <Car className="size-10 text-muted-foreground/15 mb-4" strokeWidth={1} />
-          <p className="text-[14px] font-medium text-muted-foreground">
-            Aucun véhicule trouvé
-          </p>
-          <p className="mt-1 text-[13px] text-muted-foreground">
-            Essayez de modifier vos filtres
-          </p>
+        <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border bg-white py-20">
+          <Car className="size-16 text-muted-foreground/15 mb-4" strokeWidth={1} />
+          {vehicles.length === 0 ? (
+            <>
+              <h3 className="text-[16px] font-semibold text-foreground">Aucun véhicule</h3>
+              <p className="mt-1 text-[14px] text-muted-foreground max-w-xs text-center">
+                Commencez par ajouter votre premier véhicule pour gérer votre stock.
+              </p>
+              <Link
+                href="/vehicles/new"
+                className="mt-5 inline-flex items-center gap-2 rounded-[10px] bg-[#1A1A1A] px-5 py-2.5 text-[14px] font-semibold text-white transition-colors hover:bg-black"
+              >
+                <Plus className="size-4" />
+                Ajouter un véhicule
+              </Link>
+            </>
+          ) : (
+            <>
+              <p className="text-[14px] font-semibold text-muted-foreground">
+                Aucun véhicule trouvé
+              </p>
+              <p className="mt-1 text-[13px] text-muted-foreground">
+                Essayez de modifier vos filtres
+              </p>
+            </>
+          )}
         </div>
       )}
     </div>

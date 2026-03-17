@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Car, ShoppingCart, TrendingUp, History, ArrowUpRight, ArrowDownRight, AlertTriangle, CheckCircle2, Info, Clock, Wallet, Target, Timer } from 'lucide-react';
+import { Car, Plus, ShoppingCart, TrendingUp, History, ArrowUpRight, ArrowDownRight, AlertTriangle, CheckCircle2, Info, Clock, Wallet, Target, Timer } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { getDashboardStats, getRecentActivity, getStockAlerts, getStockAnalytics } from '@/lib/actions/dashboard';
 import type { StockAlert } from '@/lib/actions/dashboard';
@@ -73,8 +73,26 @@ export default async function DashboardPage() {
         )}
       </div>
 
+      {/* Empty state — no vehicles at all */}
+      {stats && stats.inStock === 0 && stats.soldThisMonth === 0 && (
+        <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border bg-white py-16">
+          <Car className="size-16 text-muted-foreground/15 mb-4" strokeWidth={1} />
+          <h3 className="text-[16px] font-semibold text-foreground">Aucun véhicule</h3>
+          <p className="mt-1 text-[14px] text-muted-foreground max-w-xs text-center">
+            Commencez par ajouter votre premier véhicule pour voir les statistiques et l&apos;activité.
+          </p>
+          <Link
+            href="/vehicles/new"
+            className="mt-5 inline-flex items-center gap-2 rounded-[10px] bg-[#1A1A1A] px-5 py-2.5 text-[14px] font-semibold text-white transition-colors hover:bg-black"
+          >
+            <Plus className="size-4" />
+            Ajouter un véhicule
+          </Link>
+        </div>
+      )}
+
       {/* KPI Cards — Row 1 */}
-      {stats && (
+      {stats && (stats.inStock > 0 || stats.soldThisMonth > 0) && (
         <div className="grid grid-cols-2 gap-5 lg:grid-cols-4">
           <KpiCard label="Véhicules en stock" value={String(stats.inStock)} />
           <KpiCard label="En vente" value={String(stats.forSale)} />
@@ -88,7 +106,7 @@ export default async function DashboardPage() {
       )}
 
       {/* KPI Cards — Row 2 (Stock Analytics) */}
-      {analytics && (
+      {analytics && stats && (stats.inStock > 0 || stats.soldThisMonth > 0) && (
         <div className="grid grid-cols-2 gap-5 lg:grid-cols-4">
           <KpiCard
             label="Jours en stock moyen"

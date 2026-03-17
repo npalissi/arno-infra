@@ -145,3 +145,149 @@ export async function getMonthlyReport(
 
   return { data: { soldVehicles, summary }, error: null };
 }
+
+// =============================================================
+// get12MonthTrends
+// =============================================================
+
+export type MonthTrend = {
+  month: string; // "2026-03"
+  label: string; // "Mars"
+  purchased: number;
+  sold: number;
+  netMargin: number;
+};
+
+export async function get12MonthTrends(): Promise<ActionResult<MonthTrend[]>> {
+  const supabase = await createClient();
+
+  const trends: MonthTrend[] = [];
+  const now = new Date();
+
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const monthStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const startDate = `${monthStr}-01`;
+    const nextMonth = d.getMonth() === 11 ? 1 : d.getMonth() + 2;
+    const nextYear = d.getMonth() === 11 ? d.getFullYear() + 1 : d.getFullYear();
+    const endDate = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`;
+    const label = d.toLocaleDateString('fr-FR', { month: 'short' }).replace('.', '');
+
+    // Count purchased
+    const { count: purchased } = await supabase
+      .from('vehicles')
+      .select('*', { count: 'exact', head: true })
+      .gte('purchase_date', startDate)
+      .lt('purchase_date', endDate);
+
+    // Get sold vehicles with margin data
+    const { data: sold } = await supabase
+      .from('vehicles')
+      .select('id, purchase_price, sale_price')
+      .eq('status', 'vendu')
+      .not('sale_price', 'is', null)
+      .gte('sale_date', startDate)
+      .lt('sale_date', endDate) as unknown as {
+      data: { id: string; purchase_price: number; sale_price: number }[] | null;
+    };
+
+    let netMargin = 0;
+    if (sold && sold.length > 0) {
+      const vehicleIds = sold.map((v) => v.id);
+      const { data: expenses } = await supabase
+        .from('vehicle_expenses')
+        .select('vehicle_id, amount')
+        .in('vehicle_id', vehicleIds) as unknown as {
+        data: { vehicle_id: string; amount: number }[] | null;
+      };
+
+      const expMap = new Map<string, number>();
+      if (expenses) {
+        for (const e of expenses) {
+          expMap.set(e.vehicle_id, (expMap.get(e.vehicle_id) ?? 0) + e.amount);
+        }
+      }
+
+      for (const v of sold) {
+        const exp = expMap.get(v.id) ?? 0;
+        const gross = v.sale_price - v.purchase_price - exp;
+        const tva = gross > 0 ? Math.round((gross * 20) / 120) : 0;
+        netMargin += gross - tva;
+      }
+    }
+
+    trends.push({
+      month: monthStr,
+      label,
+      purchased: purchased ?? 0,
+      sold: sold?.length ?? 0,
+      netMargin,
+    });
+  }
+
+  return { data: trends, error: null };
+}
+
+// =============================================================
+// getTopVehicles
+// =============================================================
+
+export type TopVehicle = {
+  id: string;
+  brand: string;
+  model: string;
+  netMargin: number;
+};
+
+export async function getTopVehicles(): Promise<ActionResult<{ mostProfitable: TopVehicle[]; leastProfitable: TopVehicle[] }>> {
+  const supabase = await createClient();
+
+  const { data: sold } = await supabase
+    .from('vehicles')
+    .select('id, brand, model, purchase_price, sale_price')
+    .eq('status', 'vendu')
+    .not('sale_price', 'is', null) as unknown as {
+    data: { id: string; brand: string; model: string; purchase_price: number; sale_price: number }[] | null;
+  };
+
+  if (!sold || sold.length === 0) {
+    return { data: { mostProfitable: [], leastProfitable: [] }, error: null };
+  }
+
+  const vehicleIds = sold.map((v) => v.id);
+  const { data: expenses } = await supabase
+    .from('vehicle_expenses')
+    .select('vehicle_id, amount')
+    .in('vehicle_id', vehicleIds) as unknown as {
+    data: { vehicle_id: string; amount: number }[] | null;
+  };
+
+  const expMap = new Map<string, number>();
+  if (expenses) {
+    for (const e of expenses) {
+      expMap.set(e.vehicle_id, (expMap.get(e.vehicle_id) ?? 0) + e.amount);
+    }
+  }
+
+  const ranked: TopVehicle[] = sold.map((v) => {
+    const exp = expMap.get(v.id) ?? 0;
+    const gross = v.sale_price - v.purchase_price - exp;
+    const tva = gross > 0 ? Math.round((gross * 20) / 120) : 0;
+    return {
+      id: v.id,
+      brand: v.brand,
+      model: v.model,
+      netMargin: gross - tva,
+    };
+  });
+
+  ranked.sort((a, b) => b.netMargin - a.netMargin);
+
+  return {
+    data: {
+      mostProfitable: ranked.slice(0, 5),
+      leastProfitable: ranked.slice(-5).reverse().filter((v) => v.netMargin < ranked[0]?.netMargin),
+    },
+    error: null,
+  };
+}

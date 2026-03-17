@@ -22,6 +22,9 @@ import {
   Paperclip,
   Upload,
   X,
+  Receipt,
+  History,
+  TrendingUp,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -659,9 +662,11 @@ function ExpensesSection({
             </div>
           </div>
         ) : (
-          <p className="py-6 text-center text-[14px] font-medium text-muted-foreground">
-            Aucun frais enregistré
-          </p>
+          <div className="flex flex-col items-center py-10 text-center">
+            <Receipt className="size-10 text-muted-foreground/15 mb-3" strokeWidth={1} />
+            <p className="text-[14px] font-semibold text-muted-foreground">Aucun frais enregistré</p>
+            <p className="mt-1 text-[13px] text-muted-foreground">Cliquez sur « Ajouter un frais » pour commencer.</p>
+          </div>
         )}
       </CardContent>
     </Card>
@@ -790,9 +795,11 @@ function ListingsTab({
             ))}
           </div>
         ) : (
-          <p className="py-8 text-center text-[14px] font-medium text-muted-foreground">
-            Aucune annonce publiée
-          </p>
+          <div className="flex flex-col items-center py-10 text-center">
+            <Globe className="size-10 text-muted-foreground/15 mb-3" strokeWidth={1} />
+            <p className="text-[14px] font-semibold text-muted-foreground">Aucune annonce</p>
+            <p className="mt-1 text-[13px] text-muted-foreground">Ajoutez un lien vers vos annonces en ligne.</p>
+          </div>
         )}
       </CardContent>
     </Card>
@@ -1047,9 +1054,11 @@ function DocumentsTab({
             })}
           </div>
         ) : (
-          <p className="py-8 text-center text-[14px] font-medium text-muted-foreground">
-            Aucun document
-          </p>
+          <div className="flex flex-col items-center py-10 text-center">
+            <FileText className="size-10 text-muted-foreground/15 mb-3" strokeWidth={1} />
+            <p className="text-[14px] font-semibold text-muted-foreground">Aucun document</p>
+            <p className="mt-1 text-[13px] text-muted-foreground">Glissez un fichier ici ou cliquez pour en ajouter.</p>
+          </div>
         )}
       </CardContent>
     </Card>
@@ -1280,6 +1289,14 @@ export function VehicleDetailClient({
             )}
           </CardContent>
         </Card>
+
+        {/* Prix recommandé — only for unsold vehicles */}
+        {!vehicle.sale_price && (
+          <RecommendedPriceCard
+            totalCost={totalCost}
+            targetSalePrice={vehicle.target_sale_price}
+          />
+        )}
       </div>
 
       {/* Frais section — always visible */}
@@ -1332,9 +1349,11 @@ export function VehicleDetailClient({
                   ))}
                 </div>
               ) : (
-                <p className="py-8 text-center text-[14px] font-medium text-muted-foreground">
-                  Aucun historique
-                </p>
+                <div className="flex flex-col items-center py-10 text-center">
+                  <History className="size-10 text-muted-foreground/15 mb-3" strokeWidth={1} />
+                  <p className="text-[14px] font-semibold text-muted-foreground">Aucun historique</p>
+                  <p className="mt-1 text-[13px] text-muted-foreground">Les actions sur ce véhicule apparaîtront ici.</p>
+                </div>
               )}
             </CardContent>
           </Card>
@@ -1345,5 +1364,104 @@ export function VehicleDetailClient({
         </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+// ── Recommended Price Card ─────────────────────────────────
+
+function RecommendedPriceCard({
+  totalCost,
+  targetSalePrice,
+}: {
+  totalCost: number;
+  targetSalePrice: number | null;
+}) {
+  const [marginTarget, setMarginTarget] = useState(15);
+
+  // Prix recommandé = coût total / (1 - marge% / 100)
+  // But with TVA on margin: we need the sale price such that net margin = target%
+  // net margin = gross - tva, gross = sale - cost, tva = gross * 20/120
+  // net = gross - gross*20/120 = gross * 100/120
+  // we want net/sale = target/100
+  // gross * 100/120 / sale = target/100
+  // (sale - cost) * 100/120 / sale = target/100
+  // Solving: sale = cost / (1 - target * 120 / (100 * 100))
+  // = cost / (1 - target * 1.2 / 100)
+  const divisor = 1 - (marginTarget * 1.2) / 100;
+  const recommendedPrice = divisor > 0 ? Math.round(totalCost / divisor) : 0;
+
+  // Projected margins
+  const projectedGross = recommendedPrice - totalCost;
+  const projectedTva = projectedGross > 0 ? Math.round((projectedGross * 20) / 120) : 0;
+  const projectedNet = projectedGross - projectedTva;
+  const projectedPercent = recommendedPrice > 0 ? ((projectedNet / recommendedPrice) * 100).toFixed(1) : "0";
+
+  // Compare with target sale price
+  const comparison = targetSalePrice
+    ? targetSalePrice >= recommendedPrice ? "above" : "below"
+    : null;
+
+  return (
+    <Card className="border-border">
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center gap-2 text-[16px] font-semibold tracking-tight">
+          <TrendingUp className="size-4 text-brand" />
+          Prix recommandé
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {/* Recommended price */}
+        <div className="rounded-xl bg-muted/50 px-4 py-3 text-center">
+          <p className="text-[12px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">
+            Prix de vente suggéré
+          </p>
+          <p className="text-[28px] font-mono font-bold tracking-tight tabular-nums text-foreground">
+            {formatPrice(recommendedPrice)}
+          </p>
+        </div>
+
+        {/* Projected margins */}
+        <div className="space-y-1">
+          <FinancialLine label="Marge nette projetée" value={formatPrice(projectedNet)} variant="positive" bold />
+          <FinancialLine label="% Marge nette" value={`${projectedPercent}%`} variant="positive" />
+        </div>
+
+        {/* Comparison with target */}
+        {comparison && targetSalePrice && (
+          <div className={`rounded-lg px-3 py-2 text-[13px] font-semibold ${
+            comparison === "above"
+              ? "bg-positive/10 text-positive"
+              : "bg-destructive/10 text-destructive"
+          }`}>
+            {comparison === "above"
+              ? `Prix affiché ${formatPrice(targetSalePrice)} > recommandé`
+              : `Prix affiché ${formatPrice(targetSalePrice)} < recommandé — marge insuffisante`}
+          </div>
+        )}
+
+        {/* Margin slider */}
+        <div className="space-y-2 pt-1">
+          <div className="flex items-center justify-between">
+            <label className="text-[13px] font-semibold text-muted-foreground">
+              Objectif marge nette
+            </label>
+            <span className="text-[14px] font-mono font-bold tabular-nums">{marginTarget}%</span>
+          </div>
+          <input
+            type="range"
+            min={5}
+            max={30}
+            step={1}
+            value={marginTarget}
+            onChange={(e) => setMarginTarget(Number(e.target.value))}
+            className="w-full h-2 rounded-full appearance-none cursor-pointer accent-brand bg-muted"
+          />
+          <div className="flex justify-between text-[11px] font-medium text-muted-foreground tabular-nums">
+            <span>5%</span>
+            <span>30%</span>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
