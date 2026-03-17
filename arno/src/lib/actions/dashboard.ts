@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import type { VehicleHistory } from '@/types/database';
+import type { ActionResult } from '@/lib/types';
 
 // =============================================================
 // Types
@@ -18,10 +19,6 @@ export type RecentActivityItem = VehicleHistory & {
   vehicle_brand: string;
   vehicle_model: string;
 };
-
-type ActionResult<T> =
-  | { data: T; error: null }
-  | { data: null; error: string };
 
 // =============================================================
 // getDashboardStats

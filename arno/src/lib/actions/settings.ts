@@ -4,18 +4,13 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod/v4';
 import { createClient } from '@/lib/supabase/server';
 import type { AppSettings } from '@/types/database';
+import type { FormActionResult } from '@/lib/types';
 
 // =============================================================
 // Schemas Zod
 // =============================================================
 
 const categoriesSchema = z.array(z.string().min(1)).min(1);
-
-// =============================================================
-// Types
-// =============================================================
-
-type ActionResult = { error: string } | null;
 
 // =============================================================
 // Defaults (fallback si la row n'existe pas encore)
@@ -71,7 +66,7 @@ export async function getSettings(): Promise<AppSettings> {
 
 export async function updateExpenseCategories(
   categories: string[],
-): Promise<ActionResult> {
+): Promise<FormActionResult> {
   const parsed = categoriesSchema.safeParse(categories);
   if (!parsed.success) {
     return { error: parsed.error.message };
@@ -99,7 +94,7 @@ export async function updateExpenseCategories(
 
 export async function updateDocumentTypes(
   types: string[],
-): Promise<ActionResult> {
+): Promise<FormActionResult> {
   const parsed = categoriesSchema.safeParse(types);
   if (!parsed.success) {
     return { error: parsed.error.message };

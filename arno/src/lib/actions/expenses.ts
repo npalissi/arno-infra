@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod/v4';
 import { createClient } from '@/lib/supabase/server';
 import type { VehicleExpense } from '@/types/database';
+import type { ActionResult } from '@/lib/types';
 
 // =============================================================
 // Schemas Zod
@@ -21,14 +22,6 @@ const expenseInsertSchema = z.object({
 const expenseUpdateSchema = expenseInsertSchema
   .omit({ vehicle_id: true })
   .partial();
-
-// =============================================================
-// Types
-// =============================================================
-
-type ActionResult<T> =
-  | { data: T; error: null }
-  | { data: null; error: string };
 
 // =============================================================
 // 1. getExpenses

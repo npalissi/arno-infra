@@ -143,19 +143,45 @@ function parseAuto1Response(stockNumber: string, raw: any): Auto1Vehicle {
   const paint = resp.paint ?? {};
   const service = resp.service ?? {};
 
-  // Photos
+  // Damage items (extracted early — used for both photos and damage descriptions)
+  const damageItems: any[] = quality.damageItems ?? [];
+
+  // Photos — 3 sources: gallery, highlights, damages
   const galleryImages: any[] = gallery.galleryImages ?? [];
+  const highlightItems: any[] = quality.highlightItems ?? [];
   const mainImage = gallery.mainImage;
-  const photos: Auto1Photo[] = galleryImages.map((img: any, i: number) => ({
-    url: img.url?.startsWith("//") ? `https:${img.url}` : (img.url ?? ""),
-    position: i,
-  }));
+
+  const normalizeUrl = (u: string | undefined | null): string => {
+    if (!u) return "";
+    return u.startsWith("//") ? `https:${u}` : u;
+  };
+
+  let position = 0;
+  const photos: Auto1Photo[] = [];
+
+  // 1. Gallery images (main photos)
+  for (const img of galleryImages) {
+    const url = normalizeUrl(img.url);
+    if (url) photos.push({ url, position: position++ });
+  }
+
+  // 2. Highlight items (detail/condition photos)
+  for (const item of highlightItems) {
+    const url = normalizeUrl(item.fullUrl ?? item.photo ?? item.thumbnail);
+    if (url) photos.push({ url, position: position++ });
+  }
+
+  // 3. Damage items (damage photos — also parsed below for descriptions)
+  for (const item of damageItems) {
+    const url = normalizeUrl(item.fullUrl ?? item.photo);
+    if (url) photos.push({ url, position: position++ });
+  }
+
   const mainPhotoUrl = mainImage?.url
-    ? (mainImage.url.startsWith("//") ? `https:${mainImage.url}` : mainImage.url)
+    ? normalizeUrl(mainImage.url)
     : (photos[0]?.url ?? "");
 
-  // Damages
-  const damageItems: any[] = quality.damageItems ?? [];
+  // Damages (damageItems extracted above for photos)
   const damages: Auto1Damage[] = damageItems.map((d: any) => ({
     location: d.partName ?? "Inconnu",
     description: d.description ?? "",

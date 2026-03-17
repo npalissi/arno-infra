@@ -1,6 +1,7 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
+import type { ActionResult } from '@/lib/types';
 
 // =============================================================
 // Types
@@ -33,10 +34,6 @@ export type MonthlyReport = {
   soldVehicles: MonthlyReportItem[];
   summary: MonthlyReportSummary;
 };
-
-type ActionResult<T> =
-  | { data: T; error: null }
-  | { data: null; error: string };
 
 // =============================================================
 // getMonthlyReport

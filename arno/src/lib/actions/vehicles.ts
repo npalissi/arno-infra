@@ -12,6 +12,7 @@ import type {
   VehicleUpdate,
   VehicleStatus,
 } from '@/types/database';
+import type { ActionResult } from '@/lib/types';
 
 // =============================================================
 // Schemas Zod
@@ -62,6 +63,7 @@ const vehicleUpdateSchema = vehicleInsertSchema.partial();
 type VehicleListItem = Vehicle & {
   total_expenses: number;
   primary_photo_url: string | null;
+  days_in_stock: number;
 };
 
 type VehicleDetail = Vehicle & {
@@ -75,10 +77,6 @@ type VehicleDetail = Vehicle & {
   margin_percent: number | null;
   tva_on_margin: number | null;
 };
-
-type ActionResult<T> =
-  | { data: T; error: null }
-  | { data: null; error: string };
 
 // =============================================================
 // Filters
@@ -154,11 +152,19 @@ export async function getVehicles(
     }
   }
 
-  const result: VehicleListItem[] = vehicles.map((v) => ({
-    ...v,
-    total_expenses: expensesByVehicle.get(v.id) ?? 0,
-    primary_photo_url: primaryPhotos.get(v.id) ?? null,
-  }));
+  const result: VehicleListItem[] = vehicles.map((v) => {
+    const endDate = v.status === 'vendu' && v.sale_date ? v.sale_date : null;
+    const start = new Date(v.purchase_date).getTime();
+    const end = endDate ? new Date(endDate).getTime() : Date.now();
+    const days_in_stock = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
+
+    return {
+      ...v,
+      total_expenses: expensesByVehicle.get(v.id) ?? 0,
+      primary_photo_url: primaryPhotos.get(v.id) ?? null,
+      days_in_stock,
+    };
+  });
 
   return { data: result, error: null };
 }
@@ -342,5 +348,63 @@ export async function deleteVehicle(
   if (error) return { data: null, error: error.message };
 
   revalidatePath('/vehicles');
+  return { data: null, error: null };
+}
+
+// =============================================================
+// 6. quickUpdateStatus
+// =============================================================
+
+export async function quickUpdateStatus(
+  id: string,
+  newStatus: VehicleStatus,
+): Promise<ActionResult<null>> {
+  const supabase = await createClient();
+
+  // Si vendu, vérifier qu'un sale_price existe
+  if (newStatus === 'vendu') {
+    const { data: vehicle } = await supabase
+      .from('vehicles')
+      .select('sale_price')
+      .eq('id', id)
+      .single() as unknown as { data: { sale_price: number | null } | null };
+
+    if (!vehicle?.sale_price) {
+      return { data: null, error: 'Impossible de marquer comme vendu sans prix de vente' };
+    }
+  }
+
+  // Récupérer l'ancien status
+  const { data: oldVehicle } = await supabase
+    .from('vehicles')
+    .select('status')
+    .eq('id', id)
+    .single() as unknown as { data: { status: string } | null };
+
+  if (!oldVehicle) return { data: null, error: 'Véhicule introuvable' };
+  if (oldVehicle.status === newStatus) return { data: null, error: null };
+
+  // Mettre à jour le status
+  const { error } = await supabase
+    .from('vehicles')
+    .update({ status: newStatus })
+    .eq('id', id);
+
+  if (error) return { data: null, error: error.message };
+
+  // Entrée historique
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  await supabase.from('vehicle_history').insert({
+    vehicle_id: id,
+    action: 'changement_status',
+    description: `Status changé : ${oldVehicle.status} → ${newStatus}`,
+    created_by: user?.id ?? null,
+  });
+
+  revalidatePath('/vehicles');
+  revalidatePath(`/vehicles/${id}`);
   return { data: null, error: null };
 }

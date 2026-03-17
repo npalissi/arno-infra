@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod/v4';
 import { createClient } from '@/lib/supabase/server';
 import type { VehicleListing } from '@/types/database';
+import type { ActionResult } from '@/lib/types';
 
 // =============================================================
 // Schemas Zod
@@ -14,14 +15,6 @@ const listingInsertSchema = z.object({
   platform: z.string().min(1),
   url: z.string().url(),
 });
-
-// =============================================================
-// Types
-// =============================================================
-
-type ActionResult<T> =
-  | { data: T; error: null }
-  | { data: null; error: string };
 
 // =============================================================
 // 1. getVehicleListings

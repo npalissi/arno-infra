@@ -2,14 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import type { VehicleHistory } from '@/types/database';
-
-// =============================================================
-// Types
-// =============================================================
-
-type ActionResult<T> =
-  | { data: T; error: null }
-  | { data: null; error: string };
+import type { ActionResult } from '@/lib/types';
 
 // =============================================================
 // getHistory

@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod/v4';
 import { createClient } from '@/lib/supabase/server';
 import type { VehicleDocument } from '@/types/database';
+import type { ActionResult } from '@/lib/types';
 
 // =============================================================
 // Schemas Zod
@@ -13,14 +14,6 @@ const uploadDocumentSchema = z.object({
   type: z.string().min(1),
   name: z.string().min(1),
 });
-
-// =============================================================
-// Types
-// =============================================================
-
-type ActionResult<T> =
-  | { data: T; error: null }
-  | { data: null; error: string };
 
 const BUCKET = 'vehicle-documents';
 

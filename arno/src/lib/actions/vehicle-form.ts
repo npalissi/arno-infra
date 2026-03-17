@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod/v4';
 import { createClient } from '@/lib/supabase/server';
 import type { Vehicle } from '@/types/database';
+import type { FormActionResult } from '@/lib/types';
 
 // =============================================================
 // Schemas Zod
@@ -38,12 +39,6 @@ const vehicleFormSchema = z.object({
 });
 
 const vehicleFormUpdateSchema = vehicleFormSchema.partial();
-
-// =============================================================
-// Types
-// =============================================================
-
-type FormActionResult = { error: string } | null;
 
 // =============================================================
 // Helpers
