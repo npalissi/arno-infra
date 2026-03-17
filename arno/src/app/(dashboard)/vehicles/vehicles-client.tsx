@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useTransition } from "react";
 import Link from "next/link";
-import { Plus, Search, Car, LayoutGrid, List, TrendingUp } from "lucide-react";
+import { Plus, Search, Car, LayoutGrid, List, TrendingUp, X, ChevronDown } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -11,8 +11,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
+import { StatusBadge } from "@/components/shared/status-badge";
+import { useToast } from "@/components/shared/toast";
 import { VehicleCard, type VehicleCardData } from "@/components/vehicles/vehicle-card";
+import { updateVehicle } from "@/lib/actions/vehicles";
 import { formatPrice } from "@/lib/format";
+import type { VehicleStatus } from "@/types/database";
 
 const statusOptions = [
   { value: "all", label: "Tous les statuts" },
@@ -26,14 +36,50 @@ interface VehiclesClientProps {
   vehicles: VehicleCardData[];
 }
 
+const BATCH_STATUS_OPTIONS: { value: VehicleStatus; label: string }[] = [
+  { value: "en_stock", label: "En stock" },
+  { value: "en_preparation", label: "En prépa" },
+  { value: "en_vente", label: "En vente" },
+];
+
 export function VehiclesClient({ vehicles }: VehiclesClientProps) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [brandFilter, setBrandFilter] = useState("Toutes les marques");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [mounted, setMounted] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [isPending, startTransition] = useTransition();
+  const { success: toastSuccess, error: toastError } = useToast();
 
   useEffect(() => setMounted(true), []);
+
+  function toggleSelect(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function handleBatchStatus(newStatus: VehicleStatus) {
+    const ids = Array.from(selected);
+    startTransition(async () => {
+      let failed = 0;
+      for (const id of ids) {
+        const result = await updateVehicle(id, { status: newStatus });
+        if (result.error) failed++;
+      }
+      if (failed === 0) {
+        const statusLabels: Record<string, string> = { en_stock: "En stock", en_preparation: "En prépa", en_vente: "En vente" };
+        toastSuccess(`${ids.length} véhicule${ids.length > 1 ? "s" : ""} → ${statusLabels[newStatus]}`);
+      } else {
+        toastError(`${failed} erreur${failed > 1 ? "s" : ""} lors du changement de statut`);
+      }
+      setSelected(new Set());
+    });
+  }
 
   const brandOptions = useMemo(
     () => [
@@ -176,7 +222,25 @@ export function VehiclesClient({ vehicles }: VehiclesClientProps) {
       {filteredVehicles.length > 0 ? (
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
           {filteredVehicles.map((vehicle) => (
-            <VehicleCard key={vehicle.id} vehicle={vehicle} />
+            <div key={vehicle.id} className="relative">
+              {/* Selection checkbox */}
+              <div
+                className={`absolute top-3 right-3 z-10 flex size-6 items-center justify-center rounded-md border-2 cursor-pointer transition-all ${
+                  selected.has(vehicle.id)
+                    ? "bg-brand border-brand"
+                    : "bg-white/90 border-border backdrop-blur-sm opacity-0 group-hover:opacity-100 hover:opacity-100"
+                }`}
+                style={selected.size > 0 ? { opacity: 1 } : undefined}
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleSelect(vehicle.id); }}
+              >
+                {selected.has(vehicle.id) && (
+                  <svg className="size-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                )}
+              </div>
+              <VehicleCard vehicle={vehicle} />
+            </div>
           ))}
         </div>
       ) : (
@@ -206,6 +270,40 @@ export function VehiclesClient({ vehicles }: VehiclesClientProps) {
               </p>
             </>
           )}
+        </div>
+      )}
+
+      {/* Floating batch action bar */}
+      {selected.size > 0 && (
+        <div className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2 flex items-center gap-4 rounded-2xl bg-white px-6 py-3 shadow-lg border border-border">
+          <span className="text-[14px] font-semibold tabular-nums">
+            {selected.size} véhicule{selected.size > 1 ? "s" : ""}
+          </span>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              className="inline-flex items-center gap-2 rounded-[10px] bg-[#1A1A1A] px-4 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-black"
+              disabled={isPending}
+            >
+              Changer statut
+              <ChevronDown className="size-3.5" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="center" side="top" sideOffset={8}>
+              {BATCH_STATUS_OPTIONS.map((opt) => (
+                <DropdownMenuItem key={opt.value} onClick={() => handleBatchStatus(opt.value)}>
+                  <StatusBadge status={opt.value} className="scale-90" />
+                  {opt.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <button
+            onClick={() => setSelected(new Set())}
+            className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <X className="size-4" />
+          </button>
         </div>
       )}
     </div>

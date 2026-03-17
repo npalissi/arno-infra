@@ -25,6 +25,9 @@ import {
   Receipt,
   History,
   TrendingUp,
+  ShoppingCart as CartIcon,
+  Tag,
+  Wrench,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -72,6 +75,18 @@ interface VehicleDetailClientProps {
   expenseCategories: string[];
   documentTypes: string[];
 }
+
+// ── Timeline config ─────────────────────────────────────────
+
+const timelineActionConfig: Record<string, { icon: typeof Clock; color: string; label: string }> = {
+  achat: { icon: CartIcon, color: "bg-[#1A73E8]", label: "Achat" },
+  vente: { icon: Tag, color: "bg-[#1E8E3E]", label: "Vente" },
+  changement_status: { icon: Clock, color: "bg-[#B06000]", label: "Changement de statut" },
+  ajout_frais: { icon: Wrench, color: "bg-[#DE5E36]", label: "Frais ajouté" },
+  modification_frais: { icon: Wrench, color: "bg-[#DE5E36]", label: "Frais modifié" },
+  suppression_frais: { icon: Wrench, color: "bg-[#DC2626]", label: "Frais supprimé" },
+  ajout_document: { icon: FileText, color: "bg-[#5F6368]", label: "Document ajouté" },
+};
 
 // ── Platform config ─────────────────────────────────────────
 
@@ -1325,28 +1340,29 @@ export function VehicleDetailClient({
               {history.length > 0 ? (
                 <div className="relative space-y-0">
                   {/* Timeline line */}
-                  <div className="absolute left-[7px] top-2 bottom-2 w-px bg-black/[0.06]" />
-                  {history.map((entry) => (
-                    <div
-                      key={entry.id}
-                      className="relative flex gap-4 pb-4 last:pb-0"
-                    >
-                      <div className="relative z-10 mt-1.5 size-[15px] shrink-0 rounded-full border-2 border-brand/40 bg-brand/10" />
-                      <div className="space-y-0.5">
-                        <p className="text-[14px] font-semibold">
-                          {entry.action}
-                        </p>
-                        {entry.description && (
-                          <p className="text-[13px] text-muted-foreground">
-                            {entry.description}
-                          </p>
-                        )}
-                        <p className="text-[12px] font-mono font-medium text-muted-foreground tabular-nums">
-                          {formatDate(entry.date)}
-                        </p>
+                  <div className="absolute left-[15px] top-4 bottom-4 w-[2px] bg-border" />
+                  {history.map((entry) => {
+                    const config = timelineActionConfig[entry.action] ?? { icon: Clock, color: "bg-muted-foreground", label: entry.action };
+                    const Icon = config.icon;
+                    return (
+                      <div key={entry.id} className="relative flex gap-4 pb-5 last:pb-0">
+                        <div className={`relative z-10 mt-0.5 flex size-[30px] shrink-0 items-center justify-center rounded-full ${config.color}`}>
+                          <Icon className="size-3.5 text-white" strokeWidth={2.5} />
+                        </div>
+                        <div className="flex-1 space-y-0.5 pt-0.5">
+                          <div className="flex items-baseline justify-between gap-2">
+                            <p className="text-[14px] font-semibold">{config.label}</p>
+                            <span className="shrink-0 text-[11px] font-mono font-medium text-muted-foreground tabular-nums">
+                              {formatDate(entry.date)}
+                            </span>
+                          </div>
+                          {entry.description && (
+                            <p className="text-[13px] text-muted-foreground">{entry.description}</p>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="flex flex-col items-center py-10 text-center">
