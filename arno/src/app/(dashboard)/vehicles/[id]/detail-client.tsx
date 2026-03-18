@@ -56,7 +56,7 @@ import { addListing, deleteListing } from "@/lib/actions/listings";
 import { createExpense, updateExpense, deleteExpense } from "@/lib/actions/expenses";
 import { updateExpenseCategories } from "@/lib/actions/settings";
 import { uploadDocument, updateDocument, deleteDocument } from "@/lib/actions/documents";
-import { getVehicleValuation, getLastValuation } from "@/lib/actions/valuation";
+import { getVehicleValuation, getLastValuation, getCachedValuation } from "@/lib/actions/valuation";
 import type { MarketValuation } from "@/lib/leboncoin/types";
 import type {
   Vehicle,
@@ -1634,9 +1634,20 @@ function MarketValuationCard({
     setLoading(false);
   }
 
-  // Auto-fetch on mount
+  // On mount: load from DB cache first, fetch LBC only if nothing cached
   useEffect(() => {
-    fetchValuation();
+    async function loadOrFetch() {
+      setLoading(true);
+      const cached = await getCachedValuation(vehicleId);
+      if (cached.data && cached.data.totalAds > 0) {
+        setValuation(cached.data);
+        setLoading(false);
+      } else {
+        setLoading(false);
+        fetchValuation();
+      }
+    }
+    loadOrFetch();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vehicleId]);
 

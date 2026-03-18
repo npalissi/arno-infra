@@ -266,6 +266,80 @@ export async function getLastValuation(
 }
 
 // =============================================================
+// getCachedValuation — load stats + ads from DB (no LBC fetch)
+// =============================================================
+
+export async function getCachedValuation(
+  vehicleId: string,
+): Promise<ActionResult<MarketValuation | null>> {
+  const supabase = await createClient();
+
+  // Get latest stats
+  const { data: stats } = await supabase
+    .from('vehicle_valuations')
+    .select('*')
+    .eq('vehicle_id', vehicleId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle() as unknown as {
+    data: VehicleValuation | null;
+  };
+
+  if (!stats) return { data: null, error: null };
+
+  // Get saved ads (active first, sorted by price)
+  const { data: savedAds } = await supabase
+    .from('valuation_ads')
+    .select('*')
+    .eq('vehicle_id', vehicleId)
+    .order('price', { ascending: true }) as unknown as {
+    data: {
+      lbc_id: number; title: string; price: number; url: string;
+      mileage: number | null; year: number | null; fuel: string | null;
+      location: string | null; department: string | null;
+      lat: number | null; lng: number | null; image: string | null;
+      last_price: number; is_active: boolean;
+    }[] | null;
+  };
+
+  // Convert DB centimes → euros to match MarketValuation format
+  const ads = (savedAds ?? []).map((ad) => ({
+    id: ad.lbc_id,
+    title: ad.title,
+    price: ad.price / 100,
+    url: ad.url,
+    mileage: ad.mileage ?? undefined,
+    year: ad.year ?? undefined,
+    fuel: ad.fuel ?? undefined,
+    location: ad.location ?? undefined,
+    department: ad.department ?? undefined,
+    lat: ad.lat ?? undefined,
+    lng: ad.lng ?? undefined,
+    image: ad.image ?? undefined,
+    last_price: ad.last_price !== ad.price ? ad.last_price / 100 : undefined,
+    is_active: ad.is_active,
+  }));
+
+  const valuation: MarketValuation = {
+    medianPrice: stats.median_price / 100,
+    minPrice: stats.min_price / 100,
+    maxPrice: stats.max_price / 100,
+    avgPrice: stats.avg_price / 100,
+    p25: stats.p25 / 100,
+    p75: stats.p75 / 100,
+    totalAds: stats.total_ads,
+    totalBeforeFilter: stats.total_ads + stats.total_excluded,
+    totalExcluded: stats.total_excluded,
+    ads,
+    searchParams: stats.search_params as Record<string, unknown>,
+    fetchedAt: stats.created_at,
+  };
+
+  console.log("[LBC CACHE] Loaded from DB:", stats.total_ads, "annonces, median:", valuation.medianPrice, "€");
+  return { data: valuation, error: null };
+}
+
+// =============================================================
 // getAuto1Valuation — fetch Auto1 vehicle + LBC market valuation
 // =============================================================
 
