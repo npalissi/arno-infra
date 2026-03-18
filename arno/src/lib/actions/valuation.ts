@@ -331,7 +331,7 @@ export async function getCachedValuation(
     totalBeforeFilter: stats.total_ads + stats.total_excluded,
     totalExcluded: stats.total_excluded,
     ads,
-    searchParams: stats.search_params as Record<string, unknown>,
+    searchParams: stats.search_params as unknown as MarketValuation['searchParams'],
     fetchedAt: stats.created_at,
   };
 
