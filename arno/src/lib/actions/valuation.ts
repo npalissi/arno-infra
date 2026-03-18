@@ -83,18 +83,13 @@ export async function getVehicleValuation(
 
       if (valuation.totalAds > 0) {
         console.log(`[LBC ACTION] ${strategy.label} OK:`, valuation.totalAds, "annonces, median:", valuation.medianPrice, "€");
-        // Auto-save to DB
-        console.log("[LBC ACTION] Auto-saving to DB for vehicle:", vehicleId);
-        try {
-          const saveResult = await saveValuation(vehicleId, valuation);
-          if (saveResult.error) {
-            console.error("[LBC ACTION] Auto-save DB error:", saveResult.error);
-          } else {
-            console.log("[LBC ACTION] Auto-save OK");
-          }
-        } catch (saveErr) {
-          console.error("[LBC ACTION] Auto-save exception:", saveErr);
-        }
+        // Auto-save to DB in background — don't block the response
+        console.log("[LBC ACTION] Auto-saving to DB in background for vehicle:", vehicleId);
+        saveValuation(vehicleId, valuation).then((r) => {
+          if (r.error) console.error("[LBC ACTION] Auto-save DB error:", r.error);
+          else console.log("[LBC ACTION] Auto-save OK");
+        }).catch((e) => console.error("[LBC ACTION] Auto-save exception:", e));
+
         return { data: valuation, error: null };
       }
 
