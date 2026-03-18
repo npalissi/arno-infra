@@ -1805,7 +1805,7 @@ function MarketValuationContent({
 
           {adsOpen && (
             <div className="mt-3 space-y-2">
-              {visibleAds.map((ad) => {
+              {visibleAds.map((ad, idx) => {
                 const priceColor = ad.price > valuation.medianPrice * 1.05
                   ? "text-destructive"
                   : ad.price < valuation.medianPrice * 0.95
@@ -1813,7 +1813,7 @@ function MarketValuationContent({
                     : "text-foreground";
 
                 return (
-                  <div key={ad.id} className="flex items-center gap-3 rounded-xl border border-border bg-white p-2.5 transition-colors hover:bg-muted/30">
+                  <div key={`${ad.id}-${idx}`} className="flex items-center gap-3 rounded-xl border border-border bg-white p-2.5 transition-colors hover:bg-muted/30">
                     {/* Thumbnail */}
                     <div className="size-16 shrink-0 overflow-hidden rounded-lg bg-muted">
                       {ad.image ? (
