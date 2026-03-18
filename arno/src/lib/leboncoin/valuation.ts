@@ -46,9 +46,15 @@ export async function getMarketValuation(
     }
   }
 
-  // Filter out zero/null prices and sort by price asc
+  // Filter out zero/null prices + wrong brand (text search returns similar cars)
+  const brandLower = params.brand?.toLowerCase();
   const validAds = ads
-    .filter((ad) => ad.price > 0)
+    .filter((ad) => {
+      if (ad.price <= 0) return false;
+      // Exclude ads that don't match the brand
+      if (brandLower && !ad.title.toLowerCase().includes(brandLower)) return false;
+      return true;
+    })
     .sort((a, b) => a.price - b.price);
 
   const totalBeforeFilter = validAds.length;
