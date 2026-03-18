@@ -1130,6 +1130,7 @@ export function VehicleDetailClient({
   expenseCategories,
   documentTypes,
 }: VehicleDetailClientProps) {
+  const [adsRefreshKey, setAdsRefreshKey] = useState(0);
   const totalCost = vehicle.purchase_price + vehicle.total_expenses;
   const grossMargin = vehicle.sale_price
     ? vehicle.sale_price - vehicle.purchase_price - vehicle.total_expenses
@@ -1321,12 +1322,13 @@ export function VehicleDetailClient({
             targetSalePrice={vehicle.target_sale_price}
             brand={vehicle.brand}
             model={vehicle.model}
+            onValuationRefreshed={() => setAdsRefreshKey((k) => k + 1)}
           />
         )}
 
         {/* LBC ads panel — right column, after estimation */}
         {!vehicle.sale_price && (
-          <LBCAdsPanel vehicleId={vehicle.id} />
+          <LBCAdsPanel vehicleId={vehicle.id} refreshKey={adsRefreshKey} />
         )}
 
         {/* Sale simulator — only for unsold vehicles */}
@@ -1415,12 +1417,14 @@ function EstimationCard({
   targetSalePrice,
   brand,
   model,
+  onValuationRefreshed,
 }: {
   vehicleId: string;
   totalCost: number;
   targetSalePrice: number | null;
   brand: string;
   model: string;
+  onValuationRefreshed?: () => void;
 }) {
   const [valuation, setValuation] = useState<MarketValuation | null>(null);
   const [loading, setLoading] = useState(false);
@@ -1441,6 +1445,10 @@ function EstimationCard({
     if (result.error) setError(result.error);
     else if (result.data) setValuation(result.data);
     setLoading(false);
+    // Notify parent to refresh ads panel (after DB save completes)
+    if (result.data && onValuationRefreshed) {
+      setTimeout(() => onValuationRefreshed(), 2000); // wait for background save
+    }
   }
 
   useEffect(() => {
@@ -1673,13 +1681,14 @@ function EstimationCard({
 
 // ── LBC Ads Panel (left column) ─────────────────────────────
 
-function LBCAdsPanel({ vehicleId }: { vehicleId: string }) {
+function LBCAdsPanel({ vehicleId, refreshKey }: { vehicleId: string; refreshKey?: number }) {
   const [ads, setAds] = useState<MarketValuation["ads"]>([]);
   const [medianPrice, setMedianPrice] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function load() {
+      setLoading(true);
       const cached = await getCachedValuation(vehicleId);
       if (cached.data && cached.data.ads.length > 0) {
         setAds(cached.data.ads);
@@ -1688,7 +1697,7 @@ function LBCAdsPanel({ vehicleId }: { vehicleId: string }) {
       setLoading(false);
     }
     load();
-  }, [vehicleId]);
+  }, [vehicleId, refreshKey]);
 
   const sortedAds = [...ads].sort((a, b) => {
     const aActive = (a as typeof a & { is_active?: boolean }).is_active !== false;
