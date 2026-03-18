@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { getMarketValuation } from '@/lib/leboncoin/valuation';
-import { fuelToLbcCode, gearboxToLbcCode } from '@/lib/leboncoin/client';
+import { fuelToLbcCode, gearboxToLbcCode, normalizeModel } from '@/lib/leboncoin/client';
 import type { MarketValuation } from '@/lib/leboncoin/types';
 import type { ActionResult } from '@/lib/types';
 
@@ -34,21 +34,29 @@ export async function getVehicleValuation(
   if (error) return { data: null, error: error.message };
   if (!vehicle) return { data: null, error: 'Véhicule introuvable' };
 
+  const model = normalizeModel(vehicle.model);
+  const fuel = fuelToLbcCode(vehicle.fuel_type);
+  const gearbox = gearboxToLbcCode(vehicle.gearbox);
+
+  console.log("[LBC ACTION] getVehicleValuation pour:", vehicle.brand, vehicle.model, "→ model normalise:", model, "| fuel:", vehicle.fuel_type, "→", fuel, "| gearbox:", vehicle.gearbox, "→", gearbox);
+
   try {
     const valuation = await getMarketValuation({
       brand: vehicle.brand,
-      model: vehicle.model,
+      model,
       yearMin: vehicle.year - 1,
       yearMax: vehicle.year + 1,
       mileageMin: Math.max(0, vehicle.mileage - 20000),
       mileageMax: vehicle.mileage + 20000,
-      fuel: fuelToLbcCode(vehicle.fuel_type),
-      gearbox: gearboxToLbcCode(vehicle.gearbox),
+      fuel,
+      gearbox,
     });
 
+    console.log("[LBC ACTION] Resultat:", valuation.totalAds, "annonces, median:", valuation.medianPrice, "€");
     return { data: valuation, error: null };
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Erreur recherche Leboncoin';
+    console.error("[LBC ACTION] ERREUR:", msg);
     return { data: null, error: msg };
   }
 }

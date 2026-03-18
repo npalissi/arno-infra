@@ -206,11 +206,34 @@ export async function searchLeboncoin(
  * Helpers to convert Arno fuel/gearbox strings to LBC codes.
  */
 export function fuelToLbcCode(fuel: string): string | undefined {
-  return FUEL_MAP[fuel.toLowerCase()];
+  const lower = fuel.toLowerCase();
+  // Direct match first
+  if (FUEL_MAP[lower]) return FUEL_MAP[lower];
+  // Fuzzy match — "Essence" → "1", "Diesel (Gasoil)" → "2", etc.
+  for (const [key, code] of Object.entries(FUEL_MAP)) {
+    if (lower.includes(key)) return code;
+  }
+  return undefined;
 }
 
 export function gearboxToLbcCode(gearbox: string): string | undefined {
-  return GEARBOX_MAP[gearbox.toLowerCase()];
+  const lower = gearbox.toLowerCase();
+  if (GEARBOX_MAP[lower]) return GEARBOX_MAP[lower];
+  // Fuzzy — "Boite de vitesse manuelle" → "1", "Automatique / Séquentielle" → "2"
+  if (lower.includes("manuelle") || lower.includes("manual")) return "1";
+  if (lower.includes("automatique") || lower.includes("auto")) return "2";
+  return undefined;
+}
+
+/**
+ * Extract base model name — "208 1.2 PureTech Like" → "208"
+ * LBC model filter only accepts the base model, not the sub-type.
+ */
+export function normalizeModel(model: string): string {
+  // Take the first word/number that looks like a model name
+  // Common patterns: "208", "308", "Clio", "C3", "Serie 3", "Classe A"
+  const match = model.match(/^(\S+(?:\s+\d+)?)/);
+  return match ? match[1] : model;
 }
 
 // ---------------------------------------------------------------------------
