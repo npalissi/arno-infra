@@ -1188,8 +1188,8 @@ export function VehicleDetailClient({
 
       {/* Top section — Photo compact + Info + Financial — all above fold */}
       <div className="grid gap-6 lg:grid-cols-[280px_1fr_320px]">
-        {/* Photo compact */}
-        <div className="space-y-2">
+        {/* Photo compact + LBC ads */}
+        <div className="space-y-4">
           <PhotoGallery
             photos={vehicle.photos}
             brand={vehicle.brand}
@@ -1197,6 +1197,10 @@ export function VehicleDetailClient({
             vehicleId={vehicle.id}
             compact
           />
+          {/* LBC ads panel — independent from EstimationCard */}
+          {!vehicle.sale_price && (
+            <LBCAdsPanel vehicleId={vehicle.id} />
+          )}
         </div>
 
         {/* Vehicle information */}
@@ -1422,7 +1426,6 @@ function EstimationCard({
   const [error, setError] = useState<string | null>(null);
   const [marginTarget, setMarginTarget] = useState(15);
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
-  const [adsOpen, setAdsOpen] = useState(false);
 
   // Geo filter
   const [geoCity, setGeoCity] = useState("");
@@ -1468,33 +1471,16 @@ function EstimationCard({
   const projPercent = suggestedPrice > 0 ? ((projNet / suggestedPrice) * 100).toFixed(1) : "0";
   const marginVariant = projNet >= 0 ? "positive" : "destructive";
 
-  // Geo helpers
-  const adsWithDistance = useMemo(() => {
-    if (!valuation) return [];
-    return valuation.ads.map((ad) => ({
-      ...ad,
-      distance: geoCoords && ad.lat && ad.lng ? Math.round(haversineKm(geoCoords.lat, geoCoords.lng, ad.lat, ad.lng)) : null,
-    }));
-  }, [valuation?.ads, geoCoords]);
-
-  const geoFilteredAds = useMemo(() => {
-    if (!geoCoords) return adsWithDistance;
-    return adsWithDistance.filter((ad) => ad.distance !== null && ad.distance <= geoRadius);
-  }, [adsWithDistance, geoCoords, geoRadius]);
-
+  // Geo stats for local comparison
   const localStats = useMemo(() => {
-    if (!geoCoords || geoFilteredAds.length === 0) return null;
-    const prices = geoFilteredAds.map((a) => a.price);
-    const sorted = [...prices].sort((a, b) => a - b);
-    return { median: sorted[Math.floor(sorted.length / 2)], count: sorted.length };
-  }, [geoCoords, geoFilteredAds]);
-
-  const displayAds = [...(geoCoords ? geoFilteredAds : adsWithDistance)].sort((a, b) => {
-    const aActive = (a as typeof a & { is_active?: boolean }).is_active !== false;
-    const bActive = (b as typeof b & { is_active?: boolean }).is_active !== false;
-    if (aActive !== bActive) return aActive ? -1 : 1;
-    return a.price - b.price;
-  });
+    if (!geoCoords || !valuation) return null;
+    const filtered = valuation.ads.filter((ad) =>
+      ad.lat && ad.lng && haversineKm(geoCoords.lat, geoCoords.lng, ad.lat, ad.lng) <= geoRadius
+    );
+    if (filtered.length === 0) return null;
+    const prices = filtered.map((a) => a.price).sort((a, b) => a - b);
+    return { median: prices[Math.floor(prices.length / 2)], count: filtered.length };
+  }, [geoCoords, geoRadius, valuation]);
 
   async function handleGeoFilter() {
     if (!geoCity.trim()) return;
@@ -1676,63 +1662,105 @@ function EstimationCard({
               </p>
             )}
 
-            {/* Ads — scrollable */}
-            {valuation && displayAds.length > 0 && (
-              <div className="border-t border-border pt-3">
-                <button onClick={() => setAdsOpen(!adsOpen)}
-                  className="flex w-full items-center justify-between py-1 text-[13px] font-semibold text-foreground hover:text-brand transition-colors">
-                  <span>Voir les {displayAds.length} annonces{geoCoords ? ` (${geoCoords.label} ${geoRadius}km)` : ""}</span>
-                  <ChevronDown className={`size-4 text-muted-foreground transition-transform duration-200 ${adsOpen ? "rotate-180" : ""}`} />
-                </button>
-                {adsOpen && (
-                  <div className="mt-3 max-h-[400px] overflow-y-auto space-y-2 pr-1">
-                    {displayAds.map((ad, idx) => {
-                      const isInactive = (ad as typeof ad & { is_active?: boolean }).is_active === false;
-                      const lastPrice = (ad as typeof ad & { last_price?: number }).last_price;
-                      const priceChanged = lastPrice && lastPrice > 0 && ad.price !== lastPrice;
-                      const priceDrop = priceChanged && ad.price < (lastPrice ?? 0);
-                      const priceColor = isInactive ? "text-muted-foreground"
-                        : ad.price > valuation.medianPrice * 1.05 ? "text-destructive"
-                        : ad.price < valuation.medianPrice * 0.95 ? "text-positive" : "text-foreground";
-
-                      return (
-                        <div key={`${ad.id}-${idx}`} className={`flex items-center gap-3 rounded-xl border border-border p-2.5 transition-colors ${
-                          isInactive ? "bg-muted/30 opacity-60" : "bg-white hover:bg-muted/30"
-                        }`}>
-                          <div className="size-16 shrink-0 overflow-hidden rounded-lg bg-muted">
-                            {ad.image ? <img src={ad.image} alt={ad.title} className={`size-full object-cover ${isInactive ? "grayscale" : ""}`} />
-                              : <div className="flex size-full items-center justify-center"><CarFront className="size-6 text-muted-foreground/20" strokeWidth={1} /></div>}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2">
-                              <p className="truncate text-[13px] font-semibold">{ad.title}</p>
-                              {isInactive && <span className="shrink-0 rounded-[4px] bg-destructive/10 px-1.5 py-0.5 text-[10px] font-bold text-destructive">Retirée</span>}
-                            </div>
-                            <div className="flex items-center gap-1.5">
-                              {priceChanged && <span className="text-[12px] font-mono tabular-nums line-through text-muted-foreground">{fmtEur(lastPrice!)}</span>}
-                              {priceChanged && <span className={`text-[11px] ${priceDrop ? "text-positive" : "text-destructive"}`}>→</span>}
-                              <p className={`text-[14px] font-mono font-bold tabular-nums ${priceColor}`}>{fmtEur(ad.price)}</p>
-                            </div>
-                            <p className="text-[11px] font-medium text-muted-foreground">
-                              {[ad.mileage ? `${new Intl.NumberFormat("fr-FR").format(ad.mileage)} km` : null, ad.year ? String(ad.year) : null,
-                                ad.distance != null ? `${ad.location ?? ""} (${ad.distance} km)` : ad.location ?? null].filter(Boolean).join(" · ")}
-                            </p>
-                          </div>
-                          <a href={ad.url} target="_blank" rel="noopener noreferrer"
-                            className={`shrink-0 rounded-lg px-2.5 py-1.5 text-[12px] font-semibold transition-colors ${isInactive ? "text-muted-foreground" : "text-brand hover:bg-brand/10"}`}>
-                            Voir
-                          </a>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
+            {/* Ads moved to left column — see LBCAdsPanel */}
           </>
         )}
       </CardContent>
     </Card>
+  );
+}
+
+// ── LBC Ads Panel (left column) ─────────────────────────────
+
+function LBCAdsPanel({ vehicleId }: { vehicleId: string }) {
+  const [ads, setAds] = useState<MarketValuation["ads"]>([]);
+  const [medianPrice, setMedianPrice] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function load() {
+      const cached = await getCachedValuation(vehicleId);
+      if (cached.data && cached.data.ads.length > 0) {
+        setAds(cached.data.ads);
+        setMedianPrice(cached.data.medianPrice);
+      }
+      setLoading(false);
+    }
+    load();
+  }, [vehicleId]);
+
+  const sortedAds = [...ads].sort((a, b) => {
+    const aActive = (a as typeof a & { is_active?: boolean }).is_active !== false;
+    const bActive = (b as typeof b & { is_active?: boolean }).is_active !== false;
+    if (aActive !== bActive) return aActive ? -1 : 1;
+    return a.price - b.price;
+  });
+
+  if (loading) {
+    return (
+      <div className="space-y-2">
+        <div className="h-4 w-32 animate-pulse rounded bg-muted" />
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} className="h-20 animate-pulse rounded-xl bg-muted" />
+        ))}
+      </div>
+    );
+  }
+
+  if (sortedAds.length === 0) return null;
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-1.5 text-[13px] font-semibold">
+        <Search className="size-3.5 text-brand" />
+        Annonces LBC ({sortedAds.length})
+      </div>
+      <div className="max-h-[500px] overflow-y-auto space-y-2 pr-0.5">
+        {sortedAds.map((ad, idx) => {
+          const isInactive = (ad as typeof ad & { is_active?: boolean }).is_active === false;
+          const lastPrice = (ad as typeof ad & { last_price?: number }).last_price;
+          const priceChanged = lastPrice && lastPrice > 0 && ad.price !== lastPrice;
+          const priceDrop = priceChanged && ad.price < (lastPrice ?? 0);
+          const priceColor = isInactive ? "text-muted-foreground"
+            : ad.price > medianPrice * 1.05 ? "text-destructive"
+            : ad.price < medianPrice * 0.95 ? "text-positive" : "text-foreground";
+
+          return (
+            <a
+              key={`${ad.id}-${idx}`}
+              href={ad.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`flex items-center gap-2.5 rounded-xl border border-border p-2 transition-colors ${
+                isInactive ? "bg-muted/30 opacity-60" : "bg-white hover:bg-muted/30"
+              }`}
+            >
+              <div className="size-12 shrink-0 overflow-hidden rounded-lg bg-muted">
+                {ad.image ? (
+                  <img src={ad.image} alt={ad.title} className={`size-full object-cover ${isInactive ? "grayscale" : ""}`} />
+                ) : (
+                  <div className="flex size-full items-center justify-center">
+                    <CarFront className="size-4 text-muted-foreground/20" strokeWidth={1} />
+                  </div>
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[12px] font-semibold">{ad.title}</p>
+                <div className="flex items-center gap-1">
+                  {priceChanged && <span className="text-[11px] font-mono tabular-nums line-through text-muted-foreground">{fmtEur(lastPrice!)}</span>}
+                  {priceChanged && <span className={`text-[10px] ${priceDrop ? "text-positive" : "text-destructive"}`}>→</span>}
+                  <span className={`text-[13px] font-mono font-bold tabular-nums ${priceColor}`}>{fmtEur(ad.price)}</span>
+                </div>
+                <p className="text-[10px] font-medium text-muted-foreground truncate">
+                  {[ad.mileage ? `${new Intl.NumberFormat("fr-FR").format(ad.mileage)} km` : null, ad.year ? String(ad.year) : null, ad.location ?? null].filter(Boolean).join(" · ")}
+                </p>
+              </div>
+              {isInactive && <span className="shrink-0 rounded-[4px] bg-destructive/10 px-1 py-0.5 text-[9px] font-bold text-destructive">Retirée</span>}
+            </a>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
