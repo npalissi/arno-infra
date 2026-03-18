@@ -1,0 +1,326 @@
+import { execSync } from "child_process";
+import { writeFileSync, unlinkSync, mkdtempSync } from "fs";
+import { join } from "path";
+import { tmpdir } from "os";
+import type { LeboncoinSearchParams, LeboncoinAd } from "./types";
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+const API_URL = "https://api.leboncoin.fr/finder/search";
+const HOMEPAGE_URL = "https://www.leboncoin.fr/";
+const CATEGORY_VOITURES = "2";
+
+// Fuel & gearbox mappings (Arno values → LBC codes)
+const FUEL_MAP: Record<string, string> = {
+  essence: "1",
+  diesel: "2",
+  gpl: "3",
+  electrique: "4",
+  électrique: "4",
+  hybride: "5",
+};
+
+const GEARBOX_MAP: Record<string, string> = {
+  manuelle: "1",
+  automatique: "2",
+};
+
+// ---------------------------------------------------------------------------
+// User-Agent — mimics LBC mobile app (same pattern as Python lbc lib)
+// ---------------------------------------------------------------------------
+
+function generateUserAgent(): string {
+  const isIos = Math.random() > 0.5;
+  if (isIos) {
+    const versions = ["18.5", "18.6", "18.7", "26.0", "26.1", "26.2"];
+    const appVersions = ["101.45.0", "101.44.0", "101.43.1", "101.42.0"];
+    const osVersion = versions[Math.floor(Math.random() * versions.length)];
+    const appVersion = appVersions[Math.floor(Math.random() * appVersions.length)];
+    const deviceId = crypto.randomUUID();
+    return `LBC;iOS;${osVersion};iPhone;phone;${deviceId};wifi;${appVersion}`;
+  } else {
+    const osVersions = ["11", "12", "13", "14", "15"];
+    const models = ["SM-G991B", "Pixel 7", "Pixel 8", "Redmi Note 12", "OnePlus 9"];
+    const appVersions = ["100.85.2", "100.84.1", "100.83.1"];
+    const osVersion = osVersions[Math.floor(Math.random() * osVersions.length)];
+    const model = models[Math.floor(Math.random() * models.length)];
+    const appVersion = appVersions[Math.floor(Math.random() * appVersions.length)];
+    const deviceId = crypto.randomUUID().replace(/-/g, "").slice(0, 16);
+    return `LBC;Android;${osVersion};${model};phone;${deviceId};wifi;${appVersion}`;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Build search payload
+// ---------------------------------------------------------------------------
+
+function buildSearchPayload(params: LeboncoinSearchParams) {
+  const enums: Record<string, string[]> = {
+    ad_type: ["offer"],
+  };
+
+  if (params.brand) enums.brand = [params.brand];
+  if (params.model) enums.model = [params.model];
+  if (params.fuel) enums.fuel = [params.fuel];
+  if (params.gearbox) enums.gearbox = [params.gearbox];
+
+  const ranges: Record<string, { min?: number; max?: number }> = {};
+
+  if (params.priceMin !== undefined || params.priceMax !== undefined) {
+    ranges.price = {};
+    if (params.priceMin !== undefined) ranges.price.min = params.priceMin;
+    if (params.priceMax !== undefined) ranges.price.max = params.priceMax;
+  }
+
+  if (params.mileageMin !== undefined || params.mileageMax !== undefined) {
+    ranges.mileage = {};
+    if (params.mileageMin !== undefined) ranges.mileage.min = params.mileageMin;
+    if (params.mileageMax !== undefined) ranges.mileage.max = params.mileageMax;
+  }
+
+  if (params.yearMin !== undefined || params.yearMax !== undefined) {
+    ranges.regdate = {};
+    if (params.yearMin !== undefined) ranges.regdate.min = params.yearMin;
+    if (params.yearMax !== undefined) ranges.regdate.max = params.yearMax;
+  }
+
+  return {
+    filters: {
+      category: { id: CATEGORY_VOITURES },
+      enums,
+      ranges,
+      keywords: { text: "" },
+    },
+    limit: 35,
+    limit_alu: 3,
+    offset: 0,
+    sort_by: "price",
+    sort_order: "asc",
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Parse response
+// ---------------------------------------------------------------------------
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+function parseAds(raw: any): LeboncoinAd[] {
+  const ads: any[] = raw?.ads ?? [];
+
+  return ads
+    .filter((ad: any) => ad.price?.[0] != null)
+    .map((ad: any) => {
+      const attrs = ad.attributes ?? [];
+      const getAttr = (key: string): string | undefined =>
+        attrs.find((a: any) => a.key === key)?.value;
+
+      const price = ad.price[0]; // LBC price is in euros (integer)
+
+      return {
+        id: ad.list_id ?? ad.store_id ?? 0,
+        title: ad.subject ?? "",
+        price,
+        url: ad.url ?? `https://www.leboncoin.fr/voitures/${ad.list_id}.htm`,
+        mileage: getAttr("mileage") ? parseInt(getAttr("mileage")!, 10) : undefined,
+        year: getAttr("regdate") ? parseInt(getAttr("regdate")!, 10) : undefined,
+        fuel: getAttr("fuel"),
+        location: ad.location?.city ?? ad.location?.department_name ?? undefined,
+        image: ad.images?.thumb_url ?? ad.images?.urls?.[0] ?? undefined,
+      };
+    });
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
+/**
+ * Search Leboncoin for vehicle ads.
+ * Mimics the LBC mobile app User-Agent to avoid Datadome blocks.
+ * First GETs the homepage to init cookies, then POSTs the search.
+ */
+export async function searchLeboncoin(
+  params: LeboncoinSearchParams,
+): Promise<LeboncoinAd[]> {
+  const ua = generateUserAgent();
+
+  const headers: Record<string, string> = {
+    "User-Agent": ua,
+    Accept: "application/json",
+    "Content-Type": "application/json",
+    "Sec-Fetch-Dest": "empty",
+    "Sec-Fetch-Mode": "cors",
+    "Sec-Fetch-Site": "same-site",
+    Origin: "https://www.leboncoin.fr",
+    Referer: "https://www.leboncoin.fr/",
+  };
+
+  // Step 1: GET homepage for cookies (like the Python lib does)
+  let cookieString = "";
+  try {
+    const homeRes = await fetch(HOMEPAGE_URL, {
+      method: "GET",
+      headers: {
+        "User-Agent": ua,
+        Accept: "text/html",
+      },
+      redirect: "follow",
+    });
+
+    const setCookies = homeRes.headers.getSetCookie?.() ?? [];
+    const cookies: string[] = [];
+    for (const sc of setCookies) {
+      const pair = sc.split(";")[0]!;
+      cookies.push(pair);
+    }
+    cookieString = cookies.join("; ");
+  } catch {
+    // Continue without cookies — might still work
+  }
+
+  // Step 2: POST search
+  const payload = buildSearchPayload(params);
+
+  const res = await fetch(API_URL, {
+    method: "POST",
+    headers: {
+      ...headers,
+      ...(cookieString ? { Cookie: cookieString } : {}),
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`Leboncoin API ${res.status}: ${text.slice(0, 200)}`);
+  }
+
+  const data = await res.json();
+  return parseAds(data);
+}
+
+/**
+ * Helpers to convert Arno fuel/gearbox strings to LBC codes.
+ */
+export function fuelToLbcCode(fuel: string): string | undefined {
+  return FUEL_MAP[fuel.toLowerCase()];
+}
+
+export function gearboxToLbcCode(gearbox: string): string | undefined {
+  return GEARBOX_MAP[gearbox.toLowerCase()];
+}
+
+// ---------------------------------------------------------------------------
+// Python bridge — uses installed `lbc` lib (curl_cffi) to bypass Datadome
+// ---------------------------------------------------------------------------
+
+const PYTHON_SEARCH_SCRIPT = `
+import json, sys
+from lbc import Client
+
+args = json.loads(sys.argv[1])
+client = Client()
+
+# Build raw payload directly (bypasses lib's kwargs validation)
+enums = {"ad_type": ["offer"]}
+if args.get("brand"): enums["brand"] = [args["brand"]]
+if args.get("model"): enums["model"] = [args["model"]]
+if args.get("fuel"): enums["fuel"] = [args["fuel"]]
+if args.get("gearbox"): enums["gearbox"] = [args["gearbox"]]
+
+ranges = {}
+if args.get("priceMin") or args.get("priceMax"):
+    ranges["price"] = {}
+    if args.get("priceMin"): ranges["price"]["min"] = args["priceMin"]
+    if args.get("priceMax"): ranges["price"]["max"] = args["priceMax"]
+if args.get("mileageMin") or args.get("mileageMax"):
+    ranges["mileage"] = {}
+    if args.get("mileageMin"): ranges["mileage"]["min"] = args["mileageMin"]
+    if args.get("mileageMax"): ranges["mileage"]["max"] = args["mileageMax"]
+if args.get("yearMin") or args.get("yearMax"):
+    ranges["regdate"] = {}
+    if args.get("yearMin"): ranges["regdate"]["min"] = args["yearMin"]
+    if args.get("yearMax"): ranges["regdate"]["max"] = args["yearMax"]
+
+payload = {
+    "filters": {
+        "category": {"id": "2"},
+        "enums": enums,
+        "ranges": ranges,
+        "keywords": {"text": ""},
+    },
+    "limit": 35,
+    "limit_alu": 3,
+    "offset": 0,
+    "sort_by": "price",
+    "sort_order": "asc",
+}
+
+body = client._fetch(method="POST", url="https://api.leboncoin.fr/finder/search", payload=payload)
+
+ads = []
+for ad in body.get("ads", []):
+    if not ad.get("price") or not ad["price"]:
+        continue
+    attrs = {a["key"]: a.get("value") for a in ad.get("attributes", [])}
+    price = ad["price"][0] if isinstance(ad["price"], list) else ad["price"]
+    ads.append({
+        "id": ad.get("list_id", 0),
+        "title": ad.get("subject", ""),
+        "price": price,
+        "url": ad.get("url", ""),
+        "mileage": int(attrs["mileage"]) if attrs.get("mileage") else None,
+        "year": int(attrs["regdate"]) if attrs.get("regdate") else None,
+        "fuel": attrs.get("fuel"),
+        "location": ad.get("location", {}).get("city"),
+        "image": (ad.get("images", {}).get("thumb_url") or
+                  (ad.get("images", {}).get("urls", [None]) or [None])[0]),
+    })
+
+print(json.dumps(ads))
+`;
+
+/**
+ * Search Leboncoin via the Python `lbc` library (uses curl_cffi to bypass Datadome).
+ * Falls back to this when native fetch gets 403.
+ */
+export function searchLeboncoinViaPython(
+  params: LeboncoinSearchParams,
+): LeboncoinAd[] {
+  const argsJson = JSON.stringify({
+    brand: params.brand,
+    model: params.model,
+    yearMin: params.yearMin,
+    yearMax: params.yearMax,
+    mileageMin: params.mileageMin,
+    mileageMax: params.mileageMax,
+    fuel: params.fuel,
+    gearbox: params.gearbox,
+    priceMin: params.priceMin,
+    priceMax: params.priceMax,
+  });
+
+  // Write Python script to a temp file (python3 -c chokes on multiline)
+  const dir = mkdtempSync(join(tmpdir(), "lbc-"));
+  const scriptPath = join(dir, "search.py");
+  const argsPath = join(dir, "args.json");
+
+  try {
+    writeFileSync(argsPath, argsJson);
+    writeFileSync(scriptPath, PYTHON_SEARCH_SCRIPT.replace("sys.argv[1]", `open("${argsPath}").read()`));
+
+    const result = execSync(`python3.11 "${scriptPath}"`, {
+      encoding: "utf-8",
+      timeout: 30000,
+    });
+
+    const ads: LeboncoinAd[] = JSON.parse(result.trim());
+    return ads;
+  } finally {
+    try { unlinkSync(scriptPath); } catch { /* ignore */ }
+    try { unlinkSync(argsPath); } catch { /* ignore */ }
+  }
+}
