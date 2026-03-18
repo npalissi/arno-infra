@@ -1,4 +1,4 @@
-import { getMonthlyReport, get12MonthTrends, getTopVehicles } from "@/lib/actions/reports";
+import { getMonthlyReport, getAnnualTrends } from "@/lib/actions/reports";
 import { ReportsClient } from "./reports-client";
 
 export default async function ReportsPage() {
@@ -6,10 +6,9 @@ export default async function ReportsPage() {
   const year = now.getFullYear();
   const month = now.getMonth() + 1;
 
-  const [result, trendsResult, topResult] = await Promise.all([
+  const [result, trendsResult] = await Promise.all([
     getMonthlyReport(year, month),
-    get12MonthTrends(),
-    getTopVehicles(),
+    getAnnualTrends(),
   ]);
 
   const initialData = result.data ?? {
@@ -24,12 +23,18 @@ export default async function ReportsPage() {
     },
   };
 
+  const annualData = trendsResult.data ?? {
+    months: [],
+    avgMarginPerVehicle: 0,
+    topProfitable: [],
+    leastProfitable: [],
+  };
+
   return (
     <ReportsClient
       initialMonth={`${year}-${String(month).padStart(2, "0")}`}
       initialData={initialData}
-      trends={trendsResult.data ?? []}
-      topVehicles={topResult.data ?? { mostProfitable: [], leastProfitable: [] }}
+      annualTrends={annualData}
     />
   );
 }
