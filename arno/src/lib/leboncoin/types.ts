@@ -25,6 +25,9 @@ export type LeboncoinAd = {
   department?: string;
   zipcode?: string;
   image?: string;
+  // v4 tracking fields (added by neptune — optional until deployed)
+  last_price?: number; // previous price in euros (0 if new)
+  is_active?: boolean; // false if ad was removed/sold
 };
 
 export type MarketValuation = {
@@ -40,4 +43,7 @@ export type MarketValuation = {
   ads: LeboncoinAd[]; // all filtered ads, sorted by price asc
   searchParams: LeboncoinSearchParams;
   fetchedAt: string; // ISO date
+  // v4 tracking (optional until deployed)
+  newAds?: number;
+  removedAds?: number;
 };

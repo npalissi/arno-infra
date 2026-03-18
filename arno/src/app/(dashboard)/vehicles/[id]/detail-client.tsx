@@ -34,7 +34,6 @@ import {
   ChevronDown,
   CarFront,
   MapPin,
-  Save,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -57,7 +56,7 @@ import { addListing, deleteListing } from "@/lib/actions/listings";
 import { createExpense, updateExpense, deleteExpense } from "@/lib/actions/expenses";
 import { updateExpenseCategories } from "@/lib/actions/settings";
 import { uploadDocument, updateDocument, deleteDocument } from "@/lib/actions/documents";
-import { getVehicleValuation, saveValuation, getLastValuation } from "@/lib/actions/valuation";
+import { getVehicleValuation, getLastValuation } from "@/lib/actions/valuation";
 import type { MarketValuation } from "@/lib/leboncoin/types";
 import type {
   Vehicle,
@@ -1700,6 +1699,18 @@ function MarketValuationCard({
   );
 }
 
+// ── Relative time ───────────────────────────────────────────
+
+function formatRelativeTime(isoDate: string): string {
+  const diff = Date.now() - new Date(isoDate).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "à l'instant";
+  if (mins < 60) return `il y a ${mins} min`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `il y a ${hours}h`;
+  return new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(isoDate));
+}
+
 // ── Haversine distance (km) ─────────────────────────────────
 
 function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
@@ -1740,9 +1751,7 @@ function MarketValuationContent({
 }) {
   const [adsOpen, setAdsOpen] = useState(false);
   const [showAll, setShowAll] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
-  const { success: toastSuccess, error: toastError } = useToast();
 
   // Fetch last saved valuation on mount
   useEffect(() => {
@@ -1784,7 +1793,13 @@ function MarketValuationContent({
     return computeStats(geoFilteredAds.map((a) => a.price));
   }, [geoCoords, geoFilteredAds]);
 
-  const sortedAds = [...(geoCoords ? geoFilteredAds : adsWithDistance)].sort((a, b) => a.price - b.price);
+  const sortedAds = [...(geoCoords ? geoFilteredAds : adsWithDistance)].sort((a, b) => {
+    // Inactive ads go to the bottom
+    const aActive = a.is_active !== false;
+    const bActive = b.is_active !== false;
+    if (aActive !== bActive) return aActive ? -1 : 1;
+    return a.price - b.price;
+  });
   const visibleAds = showAll ? sortedAds : sortedAds.slice(0, 20);
   const hasMore = sortedAds.length > 20 && !showAll;
 
@@ -1806,18 +1821,7 @@ function MarketValuationContent({
     setGeoLoading(false);
   }
 
-  async function handleSave() {
-    setSaving(true);
-    const geo = geoCoords ? { lat: geoCoords.lat, lng: geoCoords.lng, radiusKm: geoRadius, label: geoCoords.label } : undefined;
-    const result = await saveValuation(vehicleId, valuation, geo);
-    if (result.error) {
-      toastError(result.error);
-    } else {
-      toastSuccess("Cote enregistrée");
-      setLastSavedAt(new Date().toISOString());
-    }
-    setSaving(false);
-  }
+  // Save is now automatic on each refresh (server-side)
 
   return (
     <>
@@ -1928,24 +1932,32 @@ function MarketValuationContent({
         </div>
       </div>
 
-      {/* Action buttons */}
-      <div className="flex gap-2">
-        <Button variant="outline" size="sm" onClick={onRefresh} disabled={loading} className="flex-1 gap-1.5 text-[12px]">
-          <RefreshCw className={`size-3 ${loading ? "animate-spin" : ""}`} />
-          Actualiser
-        </Button>
-        <Button variant="outline" size="sm" onClick={handleSave} disabled={saving} className="flex-1 gap-1.5 text-[12px]">
-          <Save className={`size-3 ${saving ? "animate-pulse" : ""}`} />
-          {saving ? "..." : "Enregistrer"}
-        </Button>
-      </div>
-
-      {/* Last saved date */}
-      {lastSavedAt && (
-        <p className="text-[11px] font-medium text-muted-foreground text-center">
-          Dernière cote : {new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(lastSavedAt))}
-        </p>
+      {/* Tracking counters */}
+      {(valuation.newAds || valuation.removedAds) && (
+        <div className="flex items-center gap-3 text-[12px] font-semibold">
+          {valuation.newAds && valuation.newAds > 0 && (
+            <span className="text-positive">+{valuation.newAds} nouvelle{valuation.newAds > 1 ? "s" : ""}</span>
+          )}
+          {valuation.removedAds && valuation.removedAds > 0 && (
+            <span className="text-muted-foreground">-{valuation.removedAds} retirée{valuation.removedAds > 1 ? "s" : ""}</span>
+          )}
+        </div>
       )}
+
+      {/* Refresh button */}
+      <Button variant="outline" size="sm" onClick={onRefresh} disabled={loading} className="w-full gap-1.5 text-[12px]">
+        <RefreshCw className={`size-3 ${loading ? "animate-spin" : ""}`} />
+        Actualiser la cote
+      </Button>
+
+      {/* Last update date */}
+      <p className="text-[11px] font-medium text-muted-foreground text-center">
+        {lastSavedAt
+          ? `Dernière mise à jour : ${formatRelativeTime(lastSavedAt)}`
+          : valuation.fetchedAt
+            ? `Mis à jour : ${formatRelativeTime(valuation.fetchedAt)}`
+            : null}
+      </p>
 
       {/* Ads accordion */}
       {sortedAds.length > 0 && (
@@ -1961,17 +1973,24 @@ function MarketValuationContent({
           {adsOpen && (
             <div className="mt-3 space-y-2">
               {visibleAds.map((ad, idx) => {
-                const priceColor = ad.price > valuation.medianPrice * 1.05
-                  ? "text-destructive"
-                  : ad.price < valuation.medianPrice * 0.95
-                    ? "text-positive"
-                    : "text-foreground";
+                const isInactive = ad.is_active === false;
+                const priceChanged = ad.last_price && ad.last_price > 0 && ad.price !== ad.last_price;
+                const priceDrop = priceChanged && ad.price < (ad.last_price ?? 0);
+                const priceColor = isInactive
+                  ? "text-muted-foreground"
+                  : ad.price > valuation.medianPrice * 1.05
+                    ? "text-destructive"
+                    : ad.price < valuation.medianPrice * 0.95
+                      ? "text-positive"
+                      : "text-foreground";
 
                 return (
-                  <div key={`${ad.id}-${idx}`} className="flex items-center gap-3 rounded-xl border border-border bg-white p-2.5 transition-colors hover:bg-muted/30">
+                  <div key={`${ad.id}-${idx}`} className={`flex items-center gap-3 rounded-xl border border-border p-2.5 transition-colors ${
+                    isInactive ? "bg-muted/30 opacity-60" : "bg-white hover:bg-muted/30"
+                  }`}>
                     <div className="size-16 shrink-0 overflow-hidden rounded-lg bg-muted">
                       {ad.image ? (
-                        <img src={ad.image} alt={ad.title} className="size-full object-cover" />
+                        <img src={ad.image} alt={ad.title} className={`size-full object-cover ${isInactive ? "grayscale" : ""}`} />
                       ) : (
                         <div className="flex size-full items-center justify-center">
                           <CarFront className="size-6 text-muted-foreground/20" strokeWidth={1} />
@@ -1979,10 +1998,27 @@ function MarketValuationContent({
                       )}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-[13px] font-semibold">{ad.title}</p>
-                      <p className={`text-[14px] font-mono font-bold tabular-nums ${priceColor}`}>
-                        {fmtEur(ad.price)}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <p className="truncate text-[13px] font-semibold">{ad.title}</p>
+                        {isInactive && (
+                          <span className="shrink-0 rounded-[4px] bg-destructive/10 px-1.5 py-0.5 text-[10px] font-bold text-destructive">
+                            Retirée
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        {priceChanged && (
+                          <span className={`text-[12px] font-mono tabular-nums line-through ${priceDrop ? "text-muted-foreground" : "text-muted-foreground"}`}>
+                            {fmtEur(ad.last_price!)}
+                          </span>
+                        )}
+                        {priceChanged && (
+                          <span className={`text-[11px] ${priceDrop ? "text-positive" : "text-destructive"}`}>→</span>
+                        )}
+                        <p className={`text-[14px] font-mono font-bold tabular-nums ${priceColor}`}>
+                          {fmtEur(ad.price)}
+                        </p>
+                      </div>
                       <p className="text-[11px] font-medium text-muted-foreground">
                         {[
                           ad.mileage ? `${new Intl.NumberFormat("fr-FR").format(ad.mileage)} km` : null,
@@ -1994,7 +2030,9 @@ function MarketValuationContent({
                       </p>
                     </div>
                     <a href={ad.url} target="_blank" rel="noopener noreferrer"
-                      className="shrink-0 rounded-lg px-2.5 py-1.5 text-[12px] font-semibold text-brand transition-colors hover:bg-brand/10">
+                      className={`shrink-0 rounded-lg px-2.5 py-1.5 text-[12px] font-semibold transition-colors ${
+                        isInactive ? "text-muted-foreground" : "text-brand hover:bg-brand/10"
+                      }`}>
                       Voir
                     </a>
                   </div>
