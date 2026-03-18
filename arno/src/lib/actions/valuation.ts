@@ -181,8 +181,8 @@ export async function saveValuation(
 
       if (isExisting) {
         // Update existing — set last_price to old price, update current price
-        await supabase
-          .from('valuation_ads')
+        await (supabase
+          .from('valuation_ads') as unknown as { update: (data: Record<string, unknown>) => { eq: (col: string, val: unknown) => { eq: (col: string, val: unknown) => unknown } } })
           .update({
             title: ad.title,
             last_price: oldPriceCents,
@@ -202,8 +202,8 @@ export async function saveValuation(
           .eq('lbc_id', ad.id);
       } else {
         // Insert new ad
-        await supabase
-          .from('valuation_ads')
+        await (supabase
+          .from('valuation_ads') as unknown as { insert: (data: Record<string, unknown>) => unknown })
           .insert({
             vehicle_id: vehicleId,
             lbc_id: ad.id,
@@ -225,8 +225,8 @@ export async function saveValuation(
     }
 
     // Mark ads not in current fetch as inactive
-    const { error: deactivateError } = await supabase
-      .from('valuation_ads')
+    const { error: deactivateError } = await (supabase
+      .from('valuation_ads') as unknown as { update: (data: Record<string, unknown>) => { eq: (col: string, val: unknown) => { eq: (col: string, val: unknown) => { not: (col: string, op: string, val: string) => Promise<{ error: { message: string } | null }> } } } })
       .update({ is_active: false, last_seen_at: new Date().toISOString() })
       .eq('vehicle_id', vehicleId)
       .eq('is_active', true)
