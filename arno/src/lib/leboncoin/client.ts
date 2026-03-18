@@ -96,8 +96,8 @@ function buildSearchPayload(params: LeboncoinSearchParams) {
     limit: 35,
     limit_alu: 3,
     offset: 0,
-    sort_by: "price",
-    sort_order: "asc",
+    sort_by: "time",
+    sort_order: "desc",
   };
 }
 
@@ -290,8 +290,8 @@ payload = {
     "limit": 35,
     "limit_alu": 3,
     "offset": 0,
-    "sort_by": "price",
-    "sort_order": "asc",
+    "sort_by": "time",
+    "sort_order": "desc",
 }
 
 import sys as _sys
