@@ -4,8 +4,8 @@ import { GeistMono } from "geist/font/mono";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Arno — Gestion de stock",
-  description: "Application de gestion de stock véhicules d'occasion",
+  title: "Arno — Gestion Stock VO",
+  description: "Application de gestion de stock de véhicules d'occasion",
 };
 
 export default function RootLayout({

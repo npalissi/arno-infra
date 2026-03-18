@@ -28,6 +28,9 @@ import {
   ShoppingCart as CartIcon,
   Tag,
   Wrench,
+  Search,
+  AlertTriangle,
+  RefreshCw,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -49,6 +52,8 @@ import { addListing, deleteListing } from "@/lib/actions/listings";
 import { createExpense, updateExpense, deleteExpense } from "@/lib/actions/expenses";
 import { updateExpenseCategories } from "@/lib/actions/settings";
 import { uploadDocument, updateDocument, deleteDocument } from "@/lib/actions/documents";
+import { getVehicleValuation } from "@/lib/actions/valuation";
+import type { MarketValuation } from "@/lib/leboncoin/types";
 import type {
   Vehicle,
   VehiclePhoto,
@@ -1320,6 +1325,16 @@ export function VehicleDetailClient({
             purchaseDate={vehicle.purchase_date}
           />
         )}
+
+        {/* Cote Marché Leboncoin — only for unsold vehicles */}
+        {!vehicle.sale_price && (
+          <MarketValuationCard
+            vehicleId={vehicle.id}
+            targetSalePrice={vehicle.target_sale_price}
+            brand={vehicle.brand}
+            model={vehicle.model}
+          />
+        )}
       </div>
 
       {/* Frais section — always visible */}
@@ -1580,6 +1595,153 @@ function SaleSimulatorCard({
               </div>
             )}
           </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ── Market Valuation Card ──────────────────────────────────
+
+function MarketValuationCard({
+  vehicleId,
+  targetSalePrice,
+  brand,
+  model,
+}: {
+  vehicleId: string;
+  targetSalePrice: number | null;
+  brand: string;
+  model: string;
+}) {
+  const [valuation, setValuation] = useState<MarketValuation | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function fetchValuation() {
+    setLoading(true);
+    setError(null);
+    const result = await getVehicleValuation(vehicleId);
+    if (result.error) {
+      setError(result.error);
+    } else if (result.data) {
+      setValuation(result.data);
+    }
+    setLoading(false);
+  }
+
+  // Auto-fetch on mount
+  useEffect(() => {
+    fetchValuation();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vehicleId]);
+
+  // Build Leboncoin search URL
+  const lbcSearchUrl = valuation
+    ? `https://www.leboncoin.fr/recherche?category=2&text=${encodeURIComponent(`${brand} ${model}`)}`
+    : null;
+
+  // Comparison with target price
+  const delta = targetSalePrice && valuation
+    ? targetSalePrice - valuation.medianPrice * 100 // medianPrice is in euros, target is centimes
+    : null;
+
+  return (
+    <Card className="border-border">
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center gap-2 text-[16px] font-semibold tracking-tight">
+          <Search className="size-4 text-brand" />
+          Cote Marché Leboncoin
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {loading && (
+          <div className="space-y-3">
+            <div className="h-10 animate-pulse rounded-xl bg-muted" />
+            <div className="h-4 w-3/4 animate-pulse rounded bg-muted" />
+            <div className="h-4 w-1/2 animate-pulse rounded bg-muted" />
+          </div>
+        )}
+
+        {error && !loading && (
+          <div className="flex flex-col items-center gap-2 py-4 text-center">
+            <AlertTriangle className="size-8 text-muted-foreground/30" strokeWidth={1.5} />
+            <p className="text-[13px] font-semibold text-muted-foreground">Cote indisponible</p>
+            <p className="text-[12px] text-muted-foreground">{error}</p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={fetchValuation}
+              className="mt-1 gap-1.5 text-[12px]"
+            >
+              <RefreshCw className="size-3" />
+              Réessayer
+            </Button>
+          </div>
+        )}
+
+        {valuation && !loading && (
+          <>
+            {/* Median price */}
+            <div className="rounded-xl bg-muted/50 px-4 py-3 text-center">
+              <p className="text-[12px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">
+                Prix médian
+              </p>
+              <p className="text-[28px] font-mono font-bold tracking-tight tabular-nums text-foreground">
+                {new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(valuation.medianPrice)}
+              </p>
+            </div>
+
+            {/* Min — Max range */}
+            <div className="flex items-center justify-between text-[13px] font-medium text-muted-foreground">
+              <span>Min {new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(valuation.minPrice)}</span>
+              <span className="text-border">—</span>
+              <span>Max {new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(valuation.maxPrice)}</span>
+            </div>
+
+            {/* Ad count + link */}
+            <div className="flex items-center justify-between">
+              <span className="text-[13px] font-medium text-muted-foreground">
+                Basé sur {valuation.totalAds} annonce{valuation.totalAds > 1 ? "s" : ""}
+              </span>
+              {lbcSearchUrl && (
+                <a
+                  href={lbcSearchUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-[13px] font-semibold text-brand hover:text-brand/80 transition-colors"
+                >
+                  Voir sur LBC
+                  <ExternalLink className="size-3" />
+                </a>
+              )}
+            </div>
+
+            {/* Comparison badge */}
+            {delta !== null && (
+              <div className={`rounded-lg px-3 py-2 text-[13px] font-semibold ${
+                delta >= 0
+                  ? "bg-positive/10 text-positive"
+                  : "bg-destructive/10 text-destructive"
+              }`}>
+                {delta >= 0
+                  ? `Au-dessus du marché (+${formatPrice(delta)})`
+                  : `En-dessous du marché (${formatPrice(delta)})`}
+              </div>
+            )}
+
+            {/* Refresh button */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={fetchValuation}
+              disabled={loading}
+              className="w-full gap-1.5 text-[12px]"
+            >
+              <RefreshCw className={`size-3 ${loading ? "animate-spin" : ""}`} />
+              Actualiser la cote
+            </Button>
+          </>
         )}
       </CardContent>
     </Card>
