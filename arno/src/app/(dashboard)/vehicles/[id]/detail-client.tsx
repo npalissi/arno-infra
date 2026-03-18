@@ -22,6 +22,12 @@ import {
   Paperclip,
   Upload,
   X,
+  Receipt,
+  History,
+  TrendingUp,
+  ShoppingCart as CartIcon,
+  Tag,
+  Wrench,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -69,6 +75,18 @@ interface VehicleDetailClientProps {
   expenseCategories: string[];
   documentTypes: string[];
 }
+
+// ── Timeline config ─────────────────────────────────────────
+
+const timelineActionConfig: Record<string, { icon: typeof Clock; color: string; label: string }> = {
+  achat: { icon: CartIcon, color: "bg-[#1A73E8]", label: "Achat" },
+  vente: { icon: Tag, color: "bg-[#1E8E3E]", label: "Vente" },
+  changement_status: { icon: Clock, color: "bg-[#B06000]", label: "Changement de statut" },
+  ajout_frais: { icon: Wrench, color: "bg-[#DE5E36]", label: "Frais ajouté" },
+  modification_frais: { icon: Wrench, color: "bg-[#DE5E36]", label: "Frais modifié" },
+  suppression_frais: { icon: Wrench, color: "bg-[#DC2626]", label: "Frais supprimé" },
+  ajout_document: { icon: FileText, color: "bg-[#5F6368]", label: "Document ajouté" },
+};
 
 // ── Platform config ─────────────────────────────────────────
 
@@ -659,9 +677,11 @@ function ExpensesSection({
             </div>
           </div>
         ) : (
-          <p className="py-6 text-center text-[14px] font-medium text-muted-foreground">
-            Aucun frais enregistré
-          </p>
+          <div className="flex flex-col items-center py-10 text-center">
+            <Receipt className="size-10 text-muted-foreground/15 mb-3" strokeWidth={1} />
+            <p className="text-[14px] font-semibold text-muted-foreground">Aucun frais enregistré</p>
+            <p className="mt-1 text-[13px] text-muted-foreground">Cliquez sur « Ajouter un frais » pour commencer.</p>
+          </div>
         )}
       </CardContent>
     </Card>
@@ -790,9 +810,11 @@ function ListingsTab({
             ))}
           </div>
         ) : (
-          <p className="py-8 text-center text-[14px] font-medium text-muted-foreground">
-            Aucune annonce publiée
-          </p>
+          <div className="flex flex-col items-center py-10 text-center">
+            <Globe className="size-10 text-muted-foreground/15 mb-3" strokeWidth={1} />
+            <p className="text-[14px] font-semibold text-muted-foreground">Aucune annonce</p>
+            <p className="mt-1 text-[13px] text-muted-foreground">Ajoutez un lien vers vos annonces en ligne.</p>
+          </div>
         )}
       </CardContent>
     </Card>
@@ -1047,9 +1069,11 @@ function DocumentsTab({
             })}
           </div>
         ) : (
-          <p className="py-8 text-center text-[14px] font-medium text-muted-foreground">
-            Aucun document
-          </p>
+          <div className="flex flex-col items-center py-10 text-center">
+            <FileText className="size-10 text-muted-foreground/15 mb-3" strokeWidth={1} />
+            <p className="text-[14px] font-semibold text-muted-foreground">Aucun document</p>
+            <p className="mt-1 text-[13px] text-muted-foreground">Glissez un fichier ici ou cliquez pour en ajouter.</p>
+          </div>
         )}
       </CardContent>
     </Card>
@@ -1280,6 +1304,22 @@ export function VehicleDetailClient({
             )}
           </CardContent>
         </Card>
+
+        {/* Prix recommandé — only for unsold vehicles */}
+        {!vehicle.sale_price && (
+          <RecommendedPriceCard
+            totalCost={totalCost}
+            targetSalePrice={vehicle.target_sale_price}
+          />
+        )}
+
+        {/* Sale simulator — only for unsold vehicles */}
+        {!vehicle.sale_price && (
+          <SaleSimulatorCard
+            totalCost={totalCost}
+            purchaseDate={vehicle.purchase_date}
+          />
+        )}
       </div>
 
       {/* Frais section — always visible */}
@@ -1308,33 +1348,36 @@ export function VehicleDetailClient({
               {history.length > 0 ? (
                 <div className="relative space-y-0">
                   {/* Timeline line */}
-                  <div className="absolute left-[7px] top-2 bottom-2 w-px bg-black/[0.06]" />
-                  {history.map((entry) => (
-                    <div
-                      key={entry.id}
-                      className="relative flex gap-4 pb-4 last:pb-0"
-                    >
-                      <div className="relative z-10 mt-1.5 size-[15px] shrink-0 rounded-full border-2 border-brand/40 bg-brand/10" />
-                      <div className="space-y-0.5">
-                        <p className="text-[14px] font-semibold">
-                          {entry.action}
-                        </p>
-                        {entry.description && (
-                          <p className="text-[13px] text-muted-foreground">
-                            {entry.description}
-                          </p>
-                        )}
-                        <p className="text-[12px] font-mono font-medium text-muted-foreground tabular-nums">
-                          {formatDate(entry.date)}
-                        </p>
+                  <div className="absolute left-[15px] top-4 bottom-4 w-[2px] bg-border" />
+                  {history.map((entry) => {
+                    const config = timelineActionConfig[entry.action] ?? { icon: Clock, color: "bg-muted-foreground", label: entry.action };
+                    const Icon = config.icon;
+                    return (
+                      <div key={entry.id} className="relative flex gap-4 pb-5 last:pb-0">
+                        <div className={`relative z-10 mt-0.5 flex size-[30px] shrink-0 items-center justify-center rounded-full ${config.color}`}>
+                          <Icon className="size-3.5 text-white" strokeWidth={2.5} />
+                        </div>
+                        <div className="flex-1 space-y-0.5 pt-0.5">
+                          <div className="flex items-baseline justify-between gap-2">
+                            <p className="text-[14px] font-semibold">{config.label}</p>
+                            <span className="shrink-0 text-[11px] font-mono font-medium text-muted-foreground tabular-nums">
+                              {formatDate(entry.date)}
+                            </span>
+                          </div>
+                          {entry.description && (
+                            <p className="text-[13px] text-muted-foreground">{entry.description}</p>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
-                <p className="py-8 text-center text-[14px] font-medium text-muted-foreground">
-                  Aucun historique
-                </p>
+                <div className="flex flex-col items-center py-10 text-center">
+                  <History className="size-10 text-muted-foreground/15 mb-3" strokeWidth={1} />
+                  <p className="text-[14px] font-semibold text-muted-foreground">Aucun historique</p>
+                  <p className="mt-1 text-[13px] text-muted-foreground">Les actions sur ce véhicule apparaîtront ici.</p>
+                </div>
               )}
             </CardContent>
           </Card>
@@ -1345,5 +1388,200 @@ export function VehicleDetailClient({
         </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+// ── Recommended Price Card ─────────────────────────────────
+
+function RecommendedPriceCard({
+  totalCost,
+  targetSalePrice,
+}: {
+  totalCost: number;
+  targetSalePrice: number | null;
+}) {
+  const [marginTarget, setMarginTarget] = useState(15);
+
+  // Prix recommandé = coût total / (1 - marge% / 100)
+  // But with TVA on margin: we need the sale price such that net margin = target%
+  // net margin = gross - tva, gross = sale - cost, tva = gross * 20/120
+  // net = gross - gross*20/120 = gross * 100/120
+  // we want net/sale = target/100
+  // gross * 100/120 / sale = target/100
+  // (sale - cost) * 100/120 / sale = target/100
+  // Solving: sale = cost / (1 - target * 120 / (100 * 100))
+  // = cost / (1 - target * 1.2 / 100)
+  const divisor = 1 - (marginTarget * 1.2) / 100;
+  const recommendedPrice = divisor > 0 ? Math.round(totalCost / divisor) : 0;
+
+  // Projected margins
+  const projectedGross = recommendedPrice - totalCost;
+  const projectedTva = projectedGross > 0 ? Math.round((projectedGross * 20) / 120) : 0;
+  const projectedNet = projectedGross - projectedTva;
+  const projectedPercent = recommendedPrice > 0 ? ((projectedNet / recommendedPrice) * 100).toFixed(1) : "0";
+
+  // Compare with target sale price
+  const comparison = targetSalePrice
+    ? targetSalePrice >= recommendedPrice ? "above" : "below"
+    : null;
+
+  return (
+    <Card className="border-border">
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center gap-2 text-[16px] font-semibold tracking-tight">
+          <TrendingUp className="size-4 text-brand" />
+          Prix recommandé
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {/* Recommended price */}
+        <div className="rounded-xl bg-muted/50 px-4 py-3 text-center">
+          <p className="text-[12px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">
+            Prix de vente suggéré
+          </p>
+          <p className="text-[28px] font-mono font-bold tracking-tight tabular-nums text-foreground">
+            {formatPrice(recommendedPrice)}
+          </p>
+        </div>
+
+        {/* Projected margins */}
+        <div className="space-y-1">
+          <FinancialLine label="Marge nette projetée" value={formatPrice(projectedNet)} variant="positive" bold />
+          <FinancialLine label="% Marge nette" value={`${projectedPercent}%`} variant="positive" />
+        </div>
+
+        {/* Comparison with target */}
+        {comparison && targetSalePrice && (
+          <div className={`rounded-lg px-3 py-2 text-[13px] font-semibold ${
+            comparison === "above"
+              ? "bg-positive/10 text-positive"
+              : "bg-destructive/10 text-destructive"
+          }`}>
+            {comparison === "above"
+              ? `Prix affiché ${formatPrice(targetSalePrice)} > recommandé`
+              : `Prix affiché ${formatPrice(targetSalePrice)} < recommandé — marge insuffisante`}
+          </div>
+        )}
+
+        {/* Margin slider */}
+        <div className="space-y-2 pt-1">
+          <div className="flex items-center justify-between">
+            <label className="text-[13px] font-semibold text-muted-foreground">
+              Objectif marge nette
+            </label>
+            <span className="text-[14px] font-mono font-bold tabular-nums">{marginTarget}%</span>
+          </div>
+          <input
+            type="range"
+            min={5}
+            max={30}
+            step={1}
+            value={marginTarget}
+            onChange={(e) => setMarginTarget(Number(e.target.value))}
+            className="w-full h-2 rounded-full appearance-none cursor-pointer accent-brand bg-muted"
+          />
+          <div className="flex justify-between text-[11px] font-medium text-muted-foreground tabular-nums">
+            <span>5%</span>
+            <span>30%</span>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ── Sale Simulator Card ────────────────────────────────────
+
+function SaleSimulatorCard({
+  totalCost,
+  purchaseDate,
+}: {
+  totalCost: number;
+  purchaseDate: string;
+}) {
+  const [salePriceEuros, setSalePriceEuros] = useState("");
+
+  const salePriceCentimes = salePriceEuros ? Math.round(parseFloat(salePriceEuros) * 100) : null;
+  const daysHeld = Math.ceil((Date.now() - new Date(purchaseDate).getTime()) / 86400000);
+
+  const grossMargin = salePriceCentimes !== null ? salePriceCentimes - totalCost : null;
+  const tva = grossMargin !== null && grossMargin > 0 ? Math.round((grossMargin * 20) / 120) : 0;
+  const netMargin = grossMargin !== null ? grossMargin - tva : null;
+  const marginPercent = salePriceCentimes && netMargin !== null && salePriceCentimes > 0
+    ? ((netMargin / salePriceCentimes) * 100).toFixed(1)
+    : null;
+  const profitPerDay = netMargin !== null && daysHeld > 0
+    ? Math.round(netMargin / daysHeld)
+    : null;
+
+  const variant = netMargin !== null && netMargin >= 0 ? "positive" : "destructive";
+
+  return (
+    <Card className="border-border">
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center gap-2 text-[16px] font-semibold tracking-tight">
+          <CircleDollarSign className="size-4 text-brand" />
+          Simulateur de vente
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {/* Price input */}
+        <div className="space-y-1.5">
+          <label className="text-[13px] font-semibold text-muted-foreground">
+            Prix de vente simulé (€)
+          </label>
+          <Input
+            type="number"
+            step="0.01"
+            min="0"
+            placeholder="22 000"
+            value={salePriceEuros}
+            onChange={(e) => setSalePriceEuros(e.target.value)}
+            className="h-10 font-mono tabular-nums text-[15px]"
+          />
+        </div>
+
+        {/* Results */}
+        {salePriceCentimes !== null && grossMargin !== null && netMargin !== null && (
+          <div className="space-y-1 rounded-xl bg-muted/50 px-4 py-3">
+            <div className="flex items-center justify-between">
+              <span className="text-[13px] font-medium text-muted-foreground">Marge brute</span>
+              <span className={`text-[14px] font-mono font-semibold tabular-nums ${variant === "positive" ? "text-positive" : "text-destructive"}`}>
+                {formatPrice(grossMargin)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-[13px] font-medium text-muted-foreground">TVA sur marge</span>
+              <span className="text-[14px] font-mono font-medium tabular-nums text-muted-foreground">
+                - {formatPrice(tva)}
+              </span>
+            </div>
+            <Separator className="my-1.5 bg-border" />
+            <div className="flex items-center justify-between">
+              <span className="text-[13px] font-semibold text-foreground">Marge nette</span>
+              <span className={`text-[16px] font-mono font-bold tabular-nums ${variant === "positive" ? "text-positive" : "text-destructive"}`}>
+                {formatPrice(netMargin)}
+              </span>
+            </div>
+            {marginPercent && (
+              <div className="flex items-center justify-between">
+                <span className="text-[13px] font-medium text-muted-foreground">% Marge</span>
+                <span className={`text-[14px] font-mono font-bold tabular-nums ${variant === "positive" ? "text-positive" : "text-destructive"}`}>
+                  {marginPercent}%
+                </span>
+              </div>
+            )}
+            {profitPerDay !== null && (
+              <div className="flex items-center justify-between pt-1">
+                <span className="text-[13px] font-medium text-muted-foreground">Profit/jour ({daysHeld}j)</span>
+                <span className={`text-[13px] font-mono font-semibold tabular-nums ${variant === "positive" ? "text-positive" : "text-destructive"}`}>
+                  {formatPrice(profitPerDay)}/j
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }

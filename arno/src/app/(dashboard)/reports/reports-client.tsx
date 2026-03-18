@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useMemo, useCallback } from "react";
-import { Download, FileText, TrendingUp, ShoppingCart, Receipt, CircleDollarSign } from "lucide-react";
+import Link from "next/link";
+import { Download, FileText, TrendingUp, TrendingDown, ShoppingCart, Receipt, CircleDollarSign, ArrowUpRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -13,7 +14,7 @@ import {
 } from "@/components/ui/select";
 import { formatPrice, formatDate } from "@/lib/format";
 import { getMonthlyReport } from "@/lib/actions/reports";
-import type { MonthlyReportItem, MonthlyReportSummary } from "@/lib/actions/reports";
+import type { MonthlyReportItem, MonthlyReportSummary, MonthTrend, TopVehicle } from "@/lib/actions/reports";
 
 // ── Types ───────────────────────────────────────────────────
 
@@ -25,6 +26,8 @@ interface MonthlyReport {
 interface ReportsClientProps {
   initialMonth: string;
   initialData: MonthlyReport;
+  trends: MonthTrend[];
+  topVehicles: { mostProfitable: TopVehicle[]; leastProfitable: TopVehicle[] };
 }
 
 // ── Helpers ─────────────────────────────────────────────────
@@ -51,7 +54,7 @@ function computeMargins(v: MonthlyReportItem) {
 
 // ── Page ────────────────────────────────────────────────────
 
-export function ReportsClient({ initialMonth, initialData }: ReportsClientProps) {
+export function ReportsClient({ initialMonth, initialData, trends, topVehicles }: ReportsClientProps) {
   const monthOptions = useMemo(() => generateMonthOptions(), []);
   const [selectedMonth, setSelectedMonth] = useState(initialMonth);
   const [report, setReport] = useState<MonthlyReport>(initialData);
@@ -254,6 +257,161 @@ export function ReportsClient({ initialMonth, initialData }: ReportsClientProps)
           </Button>
         </div>
       )}
+
+      {/* Tendances 12 mois */}
+      {trends.length > 0 && <TrendsSection trends={trends} />}
+
+      {/* Top véhicules */}
+      {(topVehicles.mostProfitable.length > 0 || topVehicles.leastProfitable.length > 0) && (
+        <TopVehiclesSection topVehicles={topVehicles} />
+      )}
+    </div>
+  );
+}
+
+// ── Trends Section ──────────────────────────────────────────
+
+function TrendsSection({ trends }: { trends: MonthTrend[] }) {
+  const maxPurchased = Math.max(...trends.map((t) => t.purchased), 1);
+  const maxSold = Math.max(...trends.map((t) => t.sold), 1);
+  const maxMargin = Math.max(...trends.map((t) => Math.abs(t.netMargin)), 1);
+
+  return (
+    <div className="rounded-2xl bg-white p-6 shadow-[var(--shadow-card)]">
+      <div className="flex items-center gap-2 mb-5">
+        <TrendingUp className="size-4 text-muted-foreground" strokeWidth={2} />
+        <span className="text-[15px] font-semibold tracking-tight">Tendances 12 mois</span>
+      </div>
+
+      <div className="overflow-x-auto">
+        <div className="min-w-[600px]">
+          {/* Header */}
+          <div className="grid grid-cols-[80px_repeat(12,1fr)] gap-1 mb-2">
+            <div />
+            {trends.map((t) => (
+              <div key={t.month} className="text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                {t.label}
+              </div>
+            ))}
+          </div>
+
+          {/* Achetés row */}
+          <div className="grid grid-cols-[80px_repeat(12,1fr)] gap-1 items-end mb-2">
+            <span className="text-[12px] font-semibold text-muted-foreground">Achetés</span>
+            {trends.map((t) => (
+              <div key={t.month} className="flex flex-col items-center gap-1">
+                <span className="text-[11px] font-mono font-semibold tabular-nums text-muted-foreground">
+                  {t.purchased || ""}
+                </span>
+                <div
+                  className="w-full rounded-t bg-[#1A73E8]/70"
+                  style={{ height: `${Math.max((t.purchased / maxPurchased) * 40, t.purchased > 0 ? 4 : 0)}px` }}
+                />
+              </div>
+            ))}
+          </div>
+
+          {/* Vendus row */}
+          <div className="grid grid-cols-[80px_repeat(12,1fr)] gap-1 items-end mb-2">
+            <span className="text-[12px] font-semibold text-muted-foreground">Vendus</span>
+            {trends.map((t) => (
+              <div key={t.month} className="flex flex-col items-center gap-1">
+                <span className="text-[11px] font-mono font-semibold tabular-nums text-muted-foreground">
+                  {t.sold || ""}
+                </span>
+                <div
+                  className="w-full rounded-t bg-[#1E8E3E]/70"
+                  style={{ height: `${Math.max((t.sold / maxSold) * 40, t.sold > 0 ? 4 : 0)}px` }}
+                />
+              </div>
+            ))}
+          </div>
+
+          {/* Marge nette row */}
+          <div className="grid grid-cols-[80px_repeat(12,1fr)] gap-1 items-end">
+            <span className="text-[12px] font-semibold text-muted-foreground">Marge N.</span>
+            {trends.map((t) => (
+              <div key={t.month} className="flex flex-col items-center gap-1">
+                <span className={`text-[11px] font-mono font-semibold tabular-nums ${t.netMargin >= 0 ? "text-positive" : "text-destructive"}`}>
+                  {t.netMargin !== 0 ? formatPrice(t.netMargin) : ""}
+                </span>
+                <div
+                  className={`w-full rounded-t ${t.netMargin >= 0 ? "bg-positive/60" : "bg-destructive/60"}`}
+                  style={{ height: `${Math.max((Math.abs(t.netMargin) / maxMargin) * 40, t.netMargin !== 0 ? 4 : 0)}px` }}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Top Vehicles Section ────────────────────────────────────
+
+function TopVehiclesSection({ topVehicles }: { topVehicles: { mostProfitable: TopVehicle[]; leastProfitable: TopVehicle[] } }) {
+  return (
+    <div className="grid gap-6 lg:grid-cols-2">
+      {/* Most profitable */}
+      <div className="rounded-2xl bg-white p-6 shadow-[var(--shadow-card)]">
+        <div className="flex items-center gap-2 mb-4">
+          <TrendingUp className="size-4 text-positive" strokeWidth={2} />
+          <span className="text-[15px] font-semibold tracking-tight">Top 5 — Plus rentables</span>
+        </div>
+        {topVehicles.mostProfitable.length > 0 ? (
+          <div className="space-y-0">
+            {topVehicles.mostProfitable.map((v, i) => (
+              <div key={v.id} className={`flex items-center justify-between py-3 ${i < topVehicles.mostProfitable.length - 1 ? 'border-b border-border' : ''}`}>
+                <div className="flex items-center gap-3">
+                  <span className="flex size-6 items-center justify-center rounded-full bg-positive/10 text-[12px] font-bold text-positive">
+                    {i + 1}
+                  </span>
+                  <Link href={`/vehicles/${v.id}`} className="text-[14px] font-semibold hover:text-brand transition-colors inline-flex items-center gap-1">
+                    {v.brand} {v.model}
+                    <ArrowUpRight className="size-3.5 text-muted-foreground" />
+                  </Link>
+                </div>
+                <span className="text-[14px] font-mono font-bold tabular-nums text-positive">
+                  {formatPrice(v.netMargin)}
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="py-6 text-center text-[14px] text-muted-foreground">Aucune vente enregistrée</p>
+        )}
+      </div>
+
+      {/* Least profitable */}
+      <div className="rounded-2xl bg-white p-6 shadow-[var(--shadow-card)]">
+        <div className="flex items-center gap-2 mb-4">
+          <TrendingDown className="size-4 text-destructive" strokeWidth={2} />
+          <span className="text-[15px] font-semibold tracking-tight">Top 5 — Moins rentables</span>
+        </div>
+        {topVehicles.leastProfitable.length > 0 ? (
+          <div className="space-y-0">
+            {topVehicles.leastProfitable.map((v, i) => (
+              <div key={v.id} className={`flex items-center justify-between py-3 ${i < topVehicles.leastProfitable.length - 1 ? 'border-b border-border' : ''}`}>
+                <div className="flex items-center gap-3">
+                  <span className="flex size-6 items-center justify-center rounded-full bg-destructive/10 text-[12px] font-bold text-destructive">
+                    {i + 1}
+                  </span>
+                  <Link href={`/vehicles/${v.id}`} className="text-[14px] font-semibold hover:text-brand transition-colors inline-flex items-center gap-1">
+                    {v.brand} {v.model}
+                    <ArrowUpRight className="size-3.5 text-muted-foreground" />
+                  </Link>
+                </div>
+                <span className={`text-[14px] font-mono font-bold tabular-nums ${v.netMargin >= 0 ? "text-positive" : "text-destructive"}`}>
+                  {formatPrice(v.netMargin)}
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="py-6 text-center text-[14px] text-muted-foreground">Aucune vente enregistrée</p>
+        )}
+      </div>
     </div>
   );
 }

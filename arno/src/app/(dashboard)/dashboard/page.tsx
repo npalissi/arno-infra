@@ -1,7 +1,8 @@
 import Link from 'next/link';
-import { Car, ShoppingCart, TrendingUp, History, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { Car, Plus, ShoppingCart, TrendingUp, History, ArrowUpRight, ArrowDownRight, AlertTriangle, CheckCircle2, Info, Clock, Wallet, Target, Timer } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
-import { getDashboardStats, getRecentActivity } from '@/lib/actions/dashboard';
+import { getDashboardStats, getRecentActivity, getStockAlerts, getStockAnalytics } from '@/lib/actions/dashboard';
+import type { StockAlert } from '@/lib/actions/dashboard';
 
 function formatCentimes(centimes: number): string {
   return new Intl.NumberFormat('fr-FR', {
@@ -35,19 +36,29 @@ const actionDotColors: Record<string, string> = {
   ajout_document: 'bg-[#5F6368]',
 };
 
+const alertStyles: Record<StockAlert['severity'], { bg: string; text: string; icon: string; border: string }> = {
+  critical: { bg: 'bg-red-50', text: 'text-red-700', icon: 'text-red-500', border: 'border-red-200' },
+  warning: { bg: 'bg-amber-50', text: 'text-amber-700', icon: 'text-amber-500', border: 'border-amber-200' },
+  info: { bg: 'bg-blue-50', text: 'text-blue-700', icon: 'text-blue-500', border: 'border-blue-200' },
+};
+
 export default async function DashboardPage() {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [statsResult, activityResult] = await Promise.all([
+  const [statsResult, activityResult, alertsResult, analyticsResult] = await Promise.all([
     getDashboardStats(),
     getRecentActivity(5),
+    getStockAlerts(),
+    getStockAnalytics(),
   ]);
 
   const stats = statsResult.data;
   const activity = activityResult.data;
+  const alerts = alertsResult.data ?? [];
+  const analytics = analyticsResult.data;
 
   return (
     <div className="space-y-8">
@@ -62,8 +73,26 @@ export default async function DashboardPage() {
         )}
       </div>
 
-      {/* KPI Cards */}
-      {stats && (
+      {/* Empty state — no vehicles at all */}
+      {stats && stats.inStock === 0 && stats.soldThisMonth === 0 && (
+        <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border bg-white py-16">
+          <Car className="size-16 text-muted-foreground/15 mb-4" strokeWidth={1} />
+          <h3 className="text-[16px] font-semibold text-foreground">Aucun véhicule</h3>
+          <p className="mt-1 text-[14px] text-muted-foreground max-w-xs text-center">
+            Commencez par ajouter votre premier véhicule pour voir les statistiques et l&apos;activité.
+          </p>
+          <Link
+            href="/vehicles/new"
+            className="mt-5 inline-flex items-center gap-2 rounded-[10px] bg-[#1A1A1A] px-5 py-2.5 text-[14px] font-semibold text-white transition-colors hover:bg-black"
+          >
+            <Plus className="size-4" />
+            Ajouter un véhicule
+          </Link>
+        </div>
+      )}
+
+      {/* KPI Cards — Row 1 */}
+      {stats && (stats.inStock > 0 || stats.soldThisMonth > 0) && (
         <div className="grid grid-cols-2 gap-5 lg:grid-cols-4">
           <KpiCard label="Véhicules en stock" value={String(stats.inStock)} />
           <KpiCard label="En vente" value={String(stats.forSale)} />
@@ -75,6 +104,87 @@ export default async function DashboardPage() {
           />
         </div>
       )}
+
+      {/* KPI Cards — Row 2 (Stock Analytics) */}
+      {analytics && stats && (stats.inStock > 0 || stats.soldThisMonth > 0) && (
+        <div className="grid grid-cols-2 gap-5 lg:grid-cols-4">
+          <KpiCard
+            label="Jours en stock moyen"
+            value={`${analytics.avgDaysInStock}j`}
+            icon={<Timer className="size-4 text-muted-foreground" />}
+          />
+          <KpiCard
+            label="Capital investi"
+            value={formatCentimes(analytics.capitalInvested)}
+            icon={<Wallet className="size-4 text-muted-foreground" />}
+          />
+          <KpiCard
+            label="CA estimé"
+            value={formatCentimes(analytics.estimatedRevenue)}
+            icon={<Target className="size-4 text-muted-foreground" />}
+          />
+          <KpiCard
+            label="Véhicules > 30j"
+            value={String(analytics.vehiclesOver30Days)}
+            highlight={analytics.vehiclesOver30Days > 0}
+            icon={<Clock className="size-4 text-muted-foreground" />}
+          />
+        </div>
+      )}
+
+      {/* Alerts Section */}
+      <div className="rounded-2xl bg-white p-6 shadow-[var(--shadow-card)]">
+        <div className="flex items-center gap-2 mb-5">
+          <AlertTriangle className="size-4 text-muted-foreground" strokeWidth={2} />
+          <span className="text-[15px] font-semibold tracking-tight">Alertes</span>
+          {alerts.length > 0 && (
+            <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-[11px] font-bold text-destructive tabular-nums">
+              {alerts.length}
+            </span>
+          )}
+        </div>
+
+        {alerts.length > 0 ? (
+          <div className="space-y-2">
+            {alerts.map((alert) => {
+              const style = alertStyles[alert.severity];
+              return (
+                <div
+                  key={alert.id}
+                  className={`flex items-center gap-3 rounded-xl border ${style.border} ${style.bg} px-4 py-3`}
+                >
+                  {alert.severity === 'critical' ? (
+                    <AlertTriangle className={`size-4 shrink-0 ${style.icon}`} strokeWidth={2} />
+                  ) : alert.severity === 'info' ? (
+                    <Info className={`size-4 shrink-0 ${style.icon}`} strokeWidth={2} />
+                  ) : (
+                    <AlertTriangle className={`size-4 shrink-0 ${style.icon}`} strokeWidth={2} />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <span className={`text-[13px] font-semibold ${style.text}`}>
+                      {alert.message}
+                    </span>
+                  </div>
+                  <Link
+                    href={`/vehicles/${alert.vehicleId}`}
+                    className={`shrink-0 inline-flex items-center gap-1 text-[13px] font-semibold ${style.text} hover:underline`}
+                  >
+                    {alert.vehicleName}
+                    <ArrowUpRight className="size-3.5" />
+                  </Link>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="flex items-center gap-3 rounded-xl border border-positive/20 bg-positive/5 px-4 py-4">
+            <CheckCircle2 className="size-5 text-positive" strokeWidth={2} />
+            <span className="text-[14px] font-semibold text-positive">
+              Tout est en ordre
+            </span>
+          </div>
+        )}
+      </div>
 
       {/* Activité récente */}
       <div className="rounded-2xl bg-white p-6 shadow-[var(--shadow-card)]">
@@ -123,17 +233,30 @@ function KpiCard({
   label,
   value,
   positive,
+  highlight,
+  icon,
 }: {
   label: string;
   value: string;
   positive?: boolean;
+  highlight?: boolean;
+  icon?: React.ReactNode;
 }) {
   return (
     <div className="rounded-2xl bg-white p-5 shadow-[var(--shadow-card)] transition-shadow duration-200 hover:shadow-[var(--shadow-card-hover)]">
-      <span className="text-[12px] font-semibold uppercase tracking-widest text-muted-foreground">
-        {label}
-      </span>
-      <p className={`mt-2 font-mono text-[28px] font-bold tracking-tight tabular-nums ${positive !== undefined ? (positive ? 'text-positive' : 'text-destructive') : ''}`}>
+      <div className="flex items-center gap-2">
+        {icon}
+        <span className="text-[12px] font-semibold uppercase tracking-widest text-muted-foreground">
+          {label}
+        </span>
+      </div>
+      <p className={`mt-2 font-mono text-[28px] font-bold tracking-tight tabular-nums ${
+        positive !== undefined
+          ? (positive ? 'text-positive' : 'text-destructive')
+          : highlight
+            ? 'text-destructive'
+            : ''
+      }`}>
         {value}
       </p>
     </div>
