@@ -228,12 +228,24 @@ export function gearboxToLbcCode(gearbox: string): string | undefined {
 /**
  * Extract base model name — "208 1.2 PureTech Like" → "208"
  * LBC model filter only accepts the base model, not the sub-type.
+ *
+ * Patterns: "208" | "Clio" | "Serie 3" | "Classe A" | "C3" | "Golf"
+ * Sub-types to strip: "1.2 PureTech Like", "1.5 dCi", "TDI 150"
  */
 export function normalizeModel(model: string): string {
-  // Take the first word/number that looks like a model name
-  // Common patterns: "208", "308", "Clio", "C3", "Serie 3", "Classe A"
-  const match = model.match(/^(\S+(?:\s+\d+)?)/);
-  return match ? match[1] : model;
+  // Split on common sub-type separators
+  // "208 1.2 PureTech Like" → take "208" (before the version number)
+  // "Serie 3 320d" → take "Serie 3"
+  // "Classe A 180" → take "Classe A"
+
+  // First: strip everything after a version pattern like "1.2", "2.0", "1.5"
+  const beforeVersion = model.split(/\s+\d+\.\d+/)[0]!.trim();
+  if (beforeVersion && beforeVersion !== model) {
+    return beforeVersion;
+  }
+
+  // Fallback: take just the first word
+  return model.split(/\s+/)[0] ?? model;
 }
 
 // ---------------------------------------------------------------------------
@@ -282,7 +294,13 @@ payload = {
     "sort_order": "asc",
 }
 
+import sys as _sys
+_sys.stderr.write(f"[PY-LBC] Payload: {json.dumps(payload)}\\n")
+
 body = client._fetch(method="POST", url="https://api.leboncoin.fr/finder/search", payload=payload)
+
+_sys.stderr.write(f"[PY-LBC] Response total: {body.get('total', 'N/A')}, ads count: {len(body.get('ads', []))}\\n")
+_sys.stderr.write(f"[PY-LBC] Response keys: {list(body.keys())}\\n")
 
 ads = []
 for ad in body.get("ads", []):
@@ -352,10 +370,32 @@ export function searchLeboncoinViaPython(
         result = execSync(`${py} "${scriptPath}"`, {
           encoding: "utf-8",
           timeout: 30000,
+          stdio: ["pipe", "pipe", "pipe"],
           env: { ...process.env, PATH: `${process.env.PATH}:/opt/homebrew/bin:/usr/local/bin` },
         });
+        // Also capture stderr for debug logs
+        try {
+          const stderr = execSync(`${py} "${scriptPath}" 2>&1 1>/dev/null`, {
+            encoding: "utf-8",
+            timeout: 5000,
+            env: { ...process.env, PATH: `${process.env.PATH}:/opt/homebrew/bin:/usr/local/bin` },
+          });
+          if (stderr) console.log("[LBC PY STDERR]", stderr.trim());
+        } catch { /* ignore */ }
         break;
-      } catch (e) {
+      } catch (e: unknown) {
+        // execSync throws on non-zero exit — capture stdout+stderr from the error
+        if (e && typeof e === "object" && "stderr" in e) {
+          console.error("[LBC PY ERROR]", String((e as { stderr: unknown }).stderr).trim());
+        }
+        if (e && typeof e === "object" && "stdout" in e) {
+          const stdout = String((e as { stdout: unknown }).stdout).trim();
+          if (stdout.startsWith("[")) {
+            // The script may have succeeded but exited non-zero due to stderr
+            result = stdout;
+            break;
+          }
+        }
         lastErr = e;
       }
     }
