@@ -127,6 +127,10 @@ function parseAds(raw: any): LeboncoinAd[] {
         year: getAttr("regdate") ? parseInt(getAttr("regdate")!, 10) : undefined,
         fuel: getAttr("fuel"),
         location: ad.location?.city ?? ad.location?.department_name ?? undefined,
+        lat: ad.location?.lat ?? undefined,
+        lng: ad.location?.lng ?? undefined,
+        department: ad.location?.department_name ?? undefined,
+        zipcode: ad.location?.zipcode ?? undefined,
         image: ad.images?.thumb_url ?? ad.images?.urls?.[0] ?? undefined,
       };
     });
@@ -313,6 +317,7 @@ for page in range(MAX_PAGES):
             continue
         attrs = {a["key"]: a.get("value") for a in ad.get("attributes", [])}
         price = ad["price"][0] if isinstance(ad["price"], list) else ad["price"]
+        loc = ad.get("location", {})
         all_ads.append({
             "id": ad.get("list_id", 0),
             "title": ad.get("subject", ""),
@@ -321,7 +326,11 @@ for page in range(MAX_PAGES):
             "mileage": int(attrs["mileage"]) if attrs.get("mileage") else None,
             "year": int(attrs["regdate"]) if attrs.get("regdate") else None,
             "fuel": attrs.get("fuel"),
-            "location": ad.get("location", {}).get("city"),
+            "location": loc.get("city"),
+            "lat": loc.get("lat"),
+            "lng": loc.get("lng"),
+            "department": loc.get("department_name"),
+            "zipcode": loc.get("zipcode"),
             "image": (ad.get("images", {}).get("thumb_url") or
                       (ad.get("images", {}).get("urls", [None]) or [None])[0]),
         })

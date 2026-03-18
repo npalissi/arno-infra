@@ -251,3 +251,39 @@ create policy "Authenticated users can select app_settings"
 
 create policy "Authenticated users can update app_settings"
   on app_settings for update to authenticated using (true) with check (true);
+
+-- =============================================================
+-- 8. vehicle_valuations — Cote marché Leboncoin
+-- =============================================================
+
+create table if not exists vehicle_valuations (
+  id uuid primary key default gen_random_uuid(),
+  vehicle_id uuid not null references vehicles(id) on delete cascade,
+  median_price int not null, -- centimes
+  min_price int not null, -- centimes
+  max_price int not null, -- centimes
+  avg_price int not null, -- centimes
+  p25 int not null, -- centimes
+  p75 int not null, -- centimes
+  total_ads int not null,
+  total_excluded int not null,
+  search_params jsonb not null,
+  geo_lat float,
+  geo_lng float,
+  geo_radius_km int,
+  geo_label text,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_vehicle_valuations_vehicle_id on vehicle_valuations(vehicle_id);
+
+alter table vehicle_valuations enable row level security;
+
+create policy "Authenticated users can select vehicle_valuations"
+  on vehicle_valuations for select to authenticated using (true);
+
+create policy "Authenticated users can insert vehicle_valuations"
+  on vehicle_valuations for insert to authenticated with check (true);
+
+create policy "Authenticated users can delete vehicle_valuations"
+  on vehicle_valuations for delete to authenticated using (true);

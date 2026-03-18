@@ -304,6 +304,64 @@ export type Database = {
         };
         Relationships: [];
       };
+      vehicle_valuations: {
+        Row: {
+          id: string;
+          vehicle_id: string;
+          median_price: number;
+          min_price: number;
+          max_price: number;
+          avg_price: number;
+          p25: number;
+          p75: number;
+          total_ads: number;
+          total_excluded: number;
+          search_params: Record<string, unknown>;
+          geo_lat: number | null;
+          geo_lng: number | null;
+          geo_radius_km: number | null;
+          geo_label: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          vehicle_id: string;
+          median_price: number;
+          min_price: number;
+          max_price: number;
+          avg_price: number;
+          p25: number;
+          p75: number;
+          total_ads: number;
+          total_excluded: number;
+          search_params: Record<string, unknown>;
+          geo_lat?: number | null;
+          geo_lng?: number | null;
+          geo_radius_km?: number | null;
+          geo_label?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          vehicle_id?: string;
+          median_price?: number;
+          min_price?: number;
+          max_price?: number;
+          avg_price?: number;
+          p25?: number;
+          p75?: number;
+          total_ads?: number;
+          total_excluded?: number;
+          search_params?: Record<string, unknown>;
+          geo_lat?: number | null;
+          geo_lng?: number | null;
+          geo_radius_km?: number | null;
+          geo_label?: string | null;
+        };
+        Relationships: [
+          { foreignKeyName: 'vehicle_valuations_vehicle_id_fkey'; columns: ['vehicle_id']; isOneToOne: false; referencedRelation: 'vehicles'; referencedColumns: ['id'] },
+        ];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
@@ -343,3 +401,6 @@ export type VehicleListingInsert = Tables['vehicle_listings']['Insert'];
 
 export type AppSettings = Tables['app_settings']['Row'];
 export type AppSettingsUpdate = Tables['app_settings']['Update'];
+
+export type VehicleValuation = Tables['vehicle_valuations']['Row'];
+export type VehicleValuationInsert = Tables['vehicle_valuations']['Insert'];

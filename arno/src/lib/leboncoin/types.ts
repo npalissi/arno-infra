@@ -20,6 +20,10 @@ export type LeboncoinAd = {
   year?: number;
   fuel?: string;
   location?: string;
+  lat?: number;
+  lng?: number;
+  department?: string;
+  zipcode?: string;
   image?: string;
 };
 
