@@ -87,7 +87,7 @@ interface VehicleDetailClientProps {
 // ── Timeline config ─────────────────────────────────────────
 
 const timelineActionConfig: Record<string, { icon: typeof Clock; color: string; label: string }> = {
-  achat: { icon: CartIcon, color: "bg-[#1A73E8]", label: "Achat" },
+  achat: { icon: ShoppingCart, color: "bg-[#1A73E8]", label: "Achat" },
   vente: { icon: Tag, color: "bg-[#1E8E3E]", label: "Vente" },
   changement_status: { icon: Clock, color: "bg-[#B06000]", label: "Changement de statut" },
   ajout_frais: { icon: Wrench, color: "bg-[#DE5E36]", label: "Frais ajouté" },
