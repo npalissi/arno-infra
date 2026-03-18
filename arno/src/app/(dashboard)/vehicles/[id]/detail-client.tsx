@@ -1711,11 +1711,14 @@ function LBCAdsPanel({ vehicleId }: { vehicleId: string }) {
   if (sortedAds.length === 0) return null;
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-1.5 text-[13px] font-semibold">
-        <Search className="size-3.5 text-brand" />
-        Annonces LBC ({sortedAds.length})
-      </div>
+    <Card className="border-border">
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center gap-2 text-[16px] font-semibold tracking-tight">
+          <Search className="size-4 text-brand" />
+          Annonces LBC ({sortedAds.length})
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
       <div className="max-h-[500px] overflow-y-auto space-y-2 pr-0.5">
         {sortedAds.map((ad, idx) => {
           const isInactive = (ad as typeof ad & { is_active?: boolean }).is_active === false;
@@ -1761,7 +1764,8 @@ function LBCAdsPanel({ vehicleId }: { vehicleId: string }) {
           );
         })}
       </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 }
 
