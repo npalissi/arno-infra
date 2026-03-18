@@ -42,8 +42,6 @@ export async function getVehicleValuation(
   const fuel = fuelToLbcCode(vehicle.fuel_type);
   const gearbox = gearboxToLbcCode(vehicle.gearbox);
 
-  console.log("[LBC ACTION] getVehicleValuation pour:", vehicle.brand, vehicle.model, "→ model normalise:", model, "| fuel:", vehicle.fuel_type, "→", fuel, "| gearbox:", vehicle.gearbox, "→", gearbox);
-
   // Progressive search: start strict, widen if 0 results
   const searchStrategies = [
     // 1. Strict: year ±1, km ±20k, fuel + gearbox
@@ -78,26 +76,20 @@ export async function getVehicleValuation(
 
   try {
     for (const strategy of searchStrategies) {
-      console.log(`[LBC ACTION] Essai ${strategy.label}:`, JSON.stringify(strategy.params));
       const valuation = await getMarketValuation(strategy.params, vehicle.purchase_price);
 
       if (valuation.totalAds > 0) {
-        console.log(`[LBC ACTION] ${strategy.label} OK:`, valuation.totalAds, "annonces, median:", valuation.medianPrice, "€");
         // Auto-save to DB in background — don't block the response
-        console.log("[LBC ACTION] Auto-saving to DB in background for vehicle:", vehicleId);
         saveValuation(vehicleId, valuation).then((r) => {
           if (r.error) console.error("[LBC ACTION] Auto-save DB error:", r.error);
-          else console.log("[LBC ACTION] Auto-save OK");
         }).catch((e) => console.error("[LBC ACTION] Auto-save exception:", e));
 
         return { data: valuation, error: null };
       }
 
-      console.log(`[LBC ACTION] ${strategy.label}: 0 annonces, elargissement...`);
     }
 
     // All strategies returned 0
-    console.log("[LBC ACTION] Aucune annonce trouvee meme en elargissant");
     return {
       data: {
         medianPrice: 0, minPrice: 0, maxPrice: 0, avgPrice: 0,
@@ -231,8 +223,6 @@ export async function saveValuation(
       console.error("[SAVE] Deactivate error:", deactivateError.message);
     }
 
-    const newCount = valuation.ads.filter((a) => !existingMap.has(a.id)).length;
-    console.log(`[SAVE] ${valuation.ads.length} ads synced (${newCount} new), inactive marked`);
   }
 
   revalidatePath(`/vehicles/${vehicleId}`);
@@ -335,7 +325,6 @@ export async function getCachedValuation(
     fetchedAt: stats.created_at,
   };
 
-  console.log("[LBC CACHE] Loaded from DB:", stats.total_ads, "annonces, median:", valuation.medianPrice, "€");
   return { data: valuation, error: null };
 }
 
@@ -369,15 +358,6 @@ export async function getAuto1Valuation(
     const fuel = fuelToLbcCode(auto1.fuelType);
     const gearbox = gearboxToLbcCode(auto1.gearbox);
     const purchasePrice = auto1.price.priceWithoutDiscount * 100; // euros → centimes
-
-    console.log(
-      "[AUTO1 VALUATION] getAuto1Valuation pour:",
-      auto1.brand, auto1.model,
-      "→ model normalise:", model,
-      "| fuel:", auto1.fuelType, "→", fuel,
-      "| gearbox:", auto1.gearbox, "→", gearbox,
-      "| prix:", auto1.price.priceWithoutDiscount, "€",
-    );
 
     // 2. Progressive search: strict → medium → wide (same as getVehicleValuation)
     const searchStrategies = [
@@ -414,21 +394,17 @@ export async function getAuto1Valuation(
     let valuation: MarketValuation | null = null;
 
     for (const strategy of searchStrategies) {
-      console.log(`[AUTO1 VALUATION] Essai ${strategy.label}:`, JSON.stringify(strategy.params));
       const result = await getMarketValuation(strategy.params, purchasePrice);
 
       if (result.totalAds > 0) {
-        console.log(`[AUTO1 VALUATION] ${strategy.label} OK:`, result.totalAds, "annonces, median:", result.medianPrice, "€");
         valuation = result;
         break;
       }
 
-      console.log(`[AUTO1 VALUATION] ${strategy.label}: 0 annonces, elargissement...`);
     }
 
     // All strategies returned 0
     if (!valuation) {
-      console.log("[AUTO1 VALUATION] Aucune annonce trouvee meme en elargissant");
       valuation = {
         medianPrice: 0, minPrice: 0, maxPrice: 0, avgPrice: 0,
         p25: 0, p75: 0, totalAds: 0, totalBeforeFilter: 0, totalExcluded: 0,

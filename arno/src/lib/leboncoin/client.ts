@@ -286,8 +286,6 @@ if args.get("yearMin") or args.get("yearMax"):
     if args.get("yearMin"): ranges["regdate"]["min"] = args["yearMin"]
     if args.get("yearMax"): ranges["regdate"]["max"] = args["yearMax"]
 
-import sys as _sys
-
 all_ads = []
 MAX_PAGES = 10
 
@@ -306,10 +304,8 @@ for page in range(MAX_PAGES):
         "sort_order": "desc",
     }
 
-    _sys.stderr.write(f"[PY-LBC] Page {page+1}, offset {page*35}\\n")
     body = client._fetch(method="POST", url="https://api.leboncoin.fr/finder/search", payload=payload)
     page_ads = body.get("ads", [])
-    _sys.stderr.write(f"[PY-LBC] Got {len(page_ads)} ads (total reported: {body.get('total', 'N/A')})\\n")
 
     if not page_ads:
         break
@@ -340,7 +336,6 @@ for page in range(MAX_PAGES):
     if len(page_ads) < 35:
         break
 
-_sys.stderr.write(f"[PY-LBC] Total collected: {len(all_ads)} ads across {page+1} pages\\n")
 print(json.dumps(all_ads))
 `;
 
@@ -393,15 +388,6 @@ export function searchLeboncoinViaPython(
           stdio: ["pipe", "pipe", "pipe"],
           env: { ...process.env, PATH: `${process.env.PATH}:/opt/homebrew/bin:/usr/local/bin` },
         });
-        // Also capture stderr for debug logs
-        try {
-          const stderr = execSync(`${py} "${scriptPath}" 2>&1 1>/dev/null`, {
-            encoding: "utf-8",
-            timeout: 5000,
-            env: { ...process.env, PATH: `${process.env.PATH}:/opt/homebrew/bin:/usr/local/bin` },
-          });
-          if (stderr) console.log("[LBC PY STDERR]", stderr.trim());
-        } catch { /* ignore */ }
         break;
       } catch (e: unknown) {
         // execSync throws on non-zero exit — capture stdout+stderr from the error

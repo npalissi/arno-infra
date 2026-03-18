@@ -31,23 +31,15 @@ export async function getMarketValuation(
 ): Promise<MarketValuation> {
   let ads: LeboncoinAd[];
 
-  console.log("[LBC] Recherche:", JSON.stringify(params));
-
   try {
-    console.log("[LBC] Essai fetch natif...");
     ads = await searchLeboncoin(params);
-    console.log(`[LBC] Fetch natif OK — ${ads.length} annonces`);
     if (ads.length === 0) {
-      console.log("[LBC] 0 annonces, fallback Python...");
       ads = searchLeboncoinViaPython(params);
-      console.log(`[LBC] Python OK — ${ads.length} annonces`);
     }
   } catch (fetchErr) {
     console.error("[LBC] Fetch natif ERREUR:", fetchErr instanceof Error ? fetchErr.message : fetchErr);
     try {
-      console.log("[LBC] Fallback Python...");
       ads = searchLeboncoinViaPython(params);
-      console.log(`[LBC] Python OK — ${ads.length} annonces`);
     } catch (pyErr) {
       console.error("[LBC] Python ERREUR:", pyErr instanceof Error ? pyErr.message : pyErr);
       throw pyErr;
@@ -92,8 +84,6 @@ export async function getMarketValuation(
   );
 
   const totalExcluded = totalBeforeFilter - filteredAds.length;
-
-  console.log(`[LBC] Filtrage: ${totalBeforeFilter} → ${filteredAds.length} (exclu ${totalExcluded}, floor ${Math.round(priceFloor)}€, ceiling P95 ${p95}€)`);
 
   if (filteredAds.length === 0) return { ...emptyResult, totalExcluded };
 

@@ -25,7 +25,6 @@ import {
   Receipt,
   History,
   TrendingUp,
-  ShoppingCart as CartIcon,
   Tag,
   Wrench,
   Search,
