@@ -61,12 +61,13 @@ function buildSearchPayload(params: LeboncoinSearchParams) {
     ad_type: ["offer"],
   };
 
-  // Brand/model as text keywords — LBC enums don't match all models
-  // (e.g. "TT" for Audi returns 0 with enum but 2000+ with text search)
+  // Brand as enum (precise filtering), model as text keyword
+  // (LBC enum model doesn't match all models e.g. "TT" for Audi)
+  if (params.brand) enums.brand = [params.brand];
   if (params.fuel) enums.fuel = [params.fuel];
   if (params.gearbox) enums.gearbox = [params.gearbox];
 
-  const searchText = [params.brand, params.model].filter(Boolean).join(" ");
+  const searchText = params.model ?? "";
 
   const ranges: Record<string, { min?: number; max?: number }> = {};
 
@@ -267,8 +268,9 @@ client = Client()
 
 # Build raw payload directly (bypasses lib's kwargs validation)
 enums = {"ad_type": ["offer"]}
-# Brand/model as text keywords (enum doesn't match all models)
-search_text = " ".join(filter(None, [args.get("brand"), args.get("model")]))
+# Brand as enum (precise), model as text keyword (enum doesn't match all models)
+if args.get("brand"): enums["brand"] = [args["brand"]]
+search_text = args.get("model", "")
 if args.get("fuel"): enums["fuel"] = [args["fuel"]]
 if args.get("gearbox"): enums["gearbox"] = [args["gearbox"]]
 
