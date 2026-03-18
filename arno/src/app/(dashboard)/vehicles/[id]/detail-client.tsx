@@ -1313,11 +1313,14 @@ export function VehicleDetailClient({
           </CardContent>
         </Card>
 
-        {/* Prix recommandé — only for unsold vehicles */}
+        {/* Estimation & Cote Marché — only for unsold vehicles */}
         {!vehicle.sale_price && (
-          <RecommendedPriceCard
+          <EstimationCard
+            vehicleId={vehicle.id}
             totalCost={totalCost}
             targetSalePrice={vehicle.target_sale_price}
+            brand={vehicle.brand}
+            model={vehicle.model}
           />
         )}
 
@@ -1326,16 +1329,6 @@ export function VehicleDetailClient({
           <SaleSimulatorCard
             totalCost={totalCost}
             purchaseDate={vehicle.purchase_date}
-          />
-        )}
-
-        {/* Cote Marché Leboncoin — only for unsold vehicles */}
-        {!vehicle.sale_price && (
-          <MarketValuationCard
-            vehicleId={vehicle.id}
-            targetSalePrice={vehicle.target_sale_price}
-            brand={vehicle.brand}
-            model={vehicle.model}
           />
         )}
       </div>
@@ -1409,103 +1402,362 @@ export function VehicleDetailClient({
   );
 }
 
-// ── Recommended Price Card ─────────────────────────────────
+// ── Estimation Card (unified: prix suggéré + cote LBC) ─────
 
-function RecommendedPriceCard({
+function EstimationCard({
+  vehicleId,
   totalCost,
   targetSalePrice,
+  brand,
+  model,
 }: {
+  vehicleId: string;
   totalCost: number;
   targetSalePrice: number | null;
+  brand: string;
+  model: string;
 }) {
+  const [valuation, setValuation] = useState<MarketValuation | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [marginTarget, setMarginTarget] = useState(15);
+  const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
+  const [adsOpen, setAdsOpen] = useState(false);
 
-  // Prix recommandé = coût total / (1 - marge% / 100)
-  // But with TVA on margin: we need the sale price such that net margin = target%
-  // net margin = gross - tva, gross = sale - cost, tva = gross * 20/120
-  // net = gross - gross*20/120 = gross * 100/120
-  // we want net/sale = target/100
-  // gross * 100/120 / sale = target/100
-  // (sale - cost) * 100/120 / sale = target/100
-  // Solving: sale = cost / (1 - target * 120 / (100 * 100))
-  // = cost / (1 - target * 1.2 / 100)
-  const divisor = 1 - (marginTarget * 1.2) / 100;
-  const recommendedPrice = divisor > 0 ? Math.round(totalCost / divisor) : 0;
+  // Geo filter
+  const [geoCity, setGeoCity] = useState("");
+  const [geoRadius, setGeoRadius] = useState(100);
+  const [geoCoords, setGeoCoords] = useState<{ lat: number; lng: number; label: string } | null>(null);
+  const [geoLoading, setGeoLoading] = useState(false);
 
-  // Projected margins
-  const projectedGross = recommendedPrice - totalCost;
-  const projectedTva = projectedGross > 0 ? Math.round((projectedGross * 20) / 120) : 0;
-  const projectedNet = projectedGross - projectedTva;
-  const projectedPercent = recommendedPrice > 0 ? ((projectedNet / recommendedPrice) * 100).toFixed(1) : "0";
+  async function fetchValuation() {
+    setLoading(true);
+    setError(null);
+    const result = await getVehicleValuation(vehicleId);
+    if (result.error) setError(result.error);
+    else if (result.data) setValuation(result.data);
+    setLoading(false);
+  }
 
-  // Compare with target sale price
-  const comparison = targetSalePrice
-    ? targetSalePrice >= recommendedPrice ? "above" : "below"
-    : null;
+  useEffect(() => {
+    async function loadOrFetch() {
+      setLoading(true);
+      const cached = await getCachedValuation(vehicleId);
+      if (cached.data && cached.data.totalAds > 0) {
+        setValuation(cached.data);
+        setLoading(false);
+      } else {
+        setLoading(false);
+        fetchValuation();
+      }
+      const last = await getLastValuation(vehicleId);
+      if (last.data?.created_at) setLastSavedAt(last.data.created_at);
+    }
+    loadOrFetch();
+  }, [vehicleId]);
+
+  // Prix suggéré = LBC median (in centimes) or fallback formula
+  const suggestedPrice = valuation
+    ? Math.round(valuation.medianPrice * 100) // euros → centimes
+    : (() => { const d = 1 - (marginTarget * 1.2) / 100; return d > 0 ? Math.round(totalCost / d) : 0; })();
+
+  // Projected margins at suggested price
+  const projGross = suggestedPrice - totalCost;
+  const projTva = projGross > 0 ? Math.round((projGross * 20) / 120) : 0;
+  const projNet = projGross - projTva;
+  const projPercent = suggestedPrice > 0 ? ((projNet / suggestedPrice) * 100).toFixed(1) : "0";
+  const marginVariant = projNet >= 0 ? "positive" : "destructive";
+
+  // Geo helpers
+  const adsWithDistance = useMemo(() => {
+    if (!valuation) return [];
+    return valuation.ads.map((ad) => ({
+      ...ad,
+      distance: geoCoords && ad.lat && ad.lng ? Math.round(haversineKm(geoCoords.lat, geoCoords.lng, ad.lat, ad.lng)) : null,
+    }));
+  }, [valuation?.ads, geoCoords]);
+
+  const geoFilteredAds = useMemo(() => {
+    if (!geoCoords) return adsWithDistance;
+    return adsWithDistance.filter((ad) => ad.distance !== null && ad.distance <= geoRadius);
+  }, [adsWithDistance, geoCoords, geoRadius]);
+
+  const localStats = useMemo(() => {
+    if (!geoCoords || geoFilteredAds.length === 0) return null;
+    const prices = geoFilteredAds.map((a) => a.price);
+    const sorted = [...prices].sort((a, b) => a - b);
+    return { median: sorted[Math.floor(sorted.length / 2)], count: sorted.length };
+  }, [geoCoords, geoFilteredAds]);
+
+  const displayAds = [...(geoCoords ? geoFilteredAds : adsWithDistance)].sort((a, b) => {
+    const aActive = (a as typeof a & { is_active?: boolean }).is_active !== false;
+    const bActive = (b as typeof b & { is_active?: boolean }).is_active !== false;
+    if (aActive !== bActive) return aActive ? -1 : 1;
+    return a.price - b.price;
+  });
+
+  async function handleGeoFilter() {
+    if (!geoCity.trim()) return;
+    setGeoLoading(true);
+    try {
+      const res = await fetch(`https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(geoCity)}&limit=1`);
+      const data = await res.json();
+      if (data.features?.[0]) {
+        const [lng, lat] = data.features[0].geometry.coordinates;
+        setGeoCoords({ lat, lng, label: data.features[0].properties.city || geoCity });
+      }
+    } catch { /* ignore */ }
+    setGeoLoading(false);
+  }
+
+  const lbcSearchUrl = `https://www.leboncoin.fr/recherche?category=2&text=${encodeURIComponent(`${brand} ${model}`)}`;
 
   return (
     <Card className="border-border">
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center gap-2 text-[16px] font-semibold tracking-tight">
           <TrendingUp className="size-4 text-brand" />
-          Prix recommandé
+          Estimation & Cote Marché
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        {/* Recommended price */}
-        <div className="rounded-xl bg-muted/50 px-4 py-3 text-center">
-          <p className="text-[12px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">
-            Prix de vente suggéré
-          </p>
-          <p className="text-[28px] font-mono font-bold tracking-tight tabular-nums text-foreground">
-            {formatPrice(recommendedPrice)}
-          </p>
-        </div>
-
-        {/* Projected margins */}
-        <div className="space-y-1">
-          <FinancialLine label="Marge nette projetée" value={formatPrice(projectedNet)} variant="positive" bold />
-          <FinancialLine label="% Marge nette" value={`${projectedPercent}%`} variant="positive" />
-        </div>
-
-        {/* Comparison with target */}
-        {comparison && targetSalePrice && (
-          <div className={`rounded-lg px-3 py-2 text-[13px] font-semibold ${
-            comparison === "above"
-              ? "bg-positive/10 text-positive"
-              : "bg-destructive/10 text-destructive"
-          }`}>
-            {comparison === "above"
-              ? `Prix affiché ${formatPrice(targetSalePrice)} > recommandé`
-              : `Prix affiché ${formatPrice(targetSalePrice)} < recommandé — marge insuffisante`}
+        {/* Loading */}
+        {loading && (
+          <div className="space-y-3">
+            <div className="h-12 animate-pulse rounded-xl bg-muted" />
+            <div className="h-4 w-3/4 animate-pulse rounded bg-muted" />
+            <div className="h-4 w-1/2 animate-pulse rounded bg-muted" />
           </div>
         )}
 
-        {/* Margin slider */}
-        <div className="space-y-2 pt-1">
-          <div className="flex items-center justify-between">
-            <label className="text-[13px] font-semibold text-muted-foreground">
-              Objectif marge nette
-            </label>
-            <span className="text-[14px] font-mono font-bold tabular-nums">{marginTarget}%</span>
+        {/* Error */}
+        {error && !loading && (
+          <div className="flex flex-col items-center gap-2 py-4 text-center">
+            <AlertTriangle className="size-8 text-muted-foreground/30" strokeWidth={1.5} />
+            <p className="text-[13px] font-semibold text-muted-foreground">Cote indisponible</p>
+            <p className="text-[12px] text-muted-foreground">{error}</p>
+            <Button variant="outline" size="sm" onClick={fetchValuation} className="mt-1 gap-1.5 text-[12px]">
+              <RefreshCw className="size-3" /> Réessayer
+            </Button>
           </div>
-          <input
-            type="range"
-            min={5}
-            max={30}
-            step={1}
-            value={marginTarget}
-            onChange={(e) => setMarginTarget(Number(e.target.value))}
-            className="w-full h-2 rounded-full appearance-none cursor-pointer accent-brand bg-muted"
-          />
-          <div className="flex justify-between text-[11px] font-medium text-muted-foreground tabular-nums">
-            <span>5%</span>
-            <span>30%</span>
-          </div>
-        </div>
+        )}
+
+        {/* Content */}
+        {!loading && !error && (
+          <>
+            {/* Prix suggéré */}
+            <div className="rounded-xl bg-muted/50 px-4 py-3 text-center">
+              <p className="text-[12px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">
+                {valuation ? "Prix suggéré (médiane LBC)" : "Prix suggéré"}
+              </p>
+              <p className="text-[28px] font-mono font-bold tracking-tight tabular-nums text-foreground">
+                {formatPrice(suggestedPrice)}
+              </p>
+            </div>
+
+            {/* Local comparison */}
+            {localStats && geoCoords && valuation && (
+              <div className="grid grid-cols-2 gap-2 text-center">
+                <div className="rounded-lg bg-muted/30 px-2 py-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">France</p>
+                  <p className="text-[15px] font-mono font-bold tabular-nums">{fmtEur(valuation.medianPrice)}</p>
+                  <p className="text-[10px] font-medium text-muted-foreground">{valuation.totalAds} ann.</p>
+                </div>
+                <div className="rounded-lg bg-brand/5 border border-brand/20 px-2 py-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-brand">{geoCoords.label} {geoRadius}km</p>
+                  <p className="text-[15px] font-mono font-bold tabular-nums">{fmtEur(localStats.median)}</p>
+                  <p className="text-[10px] font-medium text-muted-foreground">{localStats.count} ann.</p>
+                </div>
+              </div>
+            )}
+
+            {/* Fourchette P25-P75 */}
+            {valuation && (
+              <div className="flex items-center justify-between text-[13px] font-semibold">
+                <span className="text-muted-foreground">Fourchette</span>
+                <span className="font-mono tabular-nums">{fmtEur(valuation.p25)} — {fmtEur(valuation.p75)}</span>
+              </div>
+            )}
+
+            {/* Ton coût total */}
+            <FinancialLine label="Ton coût total" value={formatPrice(totalCost)} />
+
+            {/* Marge projetée */}
+            <Separator className="my-1 bg-border" />
+            <FinancialLine label="Marge brute projetée" value={formatPrice(projGross)} variant={marginVariant as "positive" | "destructive"} />
+            <FinancialLine label="TVA sur marge" value={`- ${formatPrice(projTva)}`} />
+            <FinancialLine label="Marge nette projetée" value={formatPrice(projNet)} variant={marginVariant as "positive" | "destructive"} bold />
+            <div className="flex items-center justify-between rounded-lg bg-muted/50 px-3 py-2">
+              <span className="text-[13px] font-semibold text-muted-foreground">% Marge</span>
+              <span className={`text-xl font-mono font-bold tabular-nums ${marginVariant === "positive" ? "text-positive" : "text-destructive"}`}>
+                {projPercent}%
+              </span>
+            </div>
+
+            {/* Comparaison avec target */}
+            {targetSalePrice && valuation && (
+              <div className={`rounded-lg px-3 py-2 text-[13px] font-semibold ${
+                targetSalePrice >= suggestedPrice ? "bg-positive/10 text-positive" : "bg-destructive/10 text-destructive"
+              }`}>
+                {targetSalePrice >= suggestedPrice
+                  ? `Prix affiché au-dessus du marché (+${formatPrice(targetSalePrice - suggestedPrice)})`
+                  : `Prix affiché en-dessous du marché (${formatPrice(targetSalePrice - suggestedPrice)})`}
+              </div>
+            )}
+
+            {/* Slider marge — ajuste à partir de la médiane */}
+            {!valuation && (
+              <div className="space-y-2 pt-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-[13px] font-semibold text-muted-foreground">Objectif marge nette</label>
+                  <span className="text-[14px] font-mono font-bold tabular-nums">{marginTarget}%</span>
+                </div>
+                <input type="range" min={5} max={30} step={1} value={marginTarget}
+                  onChange={(e) => setMarginTarget(Number(e.target.value))}
+                  className="w-full h-2 rounded-full appearance-none cursor-pointer accent-brand bg-muted" />
+                <div className="flex justify-between text-[11px] font-medium text-muted-foreground tabular-nums">
+                  <span>5%</span><span>30%</span>
+                </div>
+              </div>
+            )}
+
+            {/* Ad count + LBC link */}
+            {valuation && (
+              <div className="flex items-center justify-between">
+                <span className="text-[13px] font-medium text-muted-foreground">
+                  {valuation.totalAds} annonce{valuation.totalAds > 1 ? "s" : ""}
+                  {valuation.totalExcluded > 0 && <span className="text-[12px]"> ({valuation.totalExcluded} exclue{valuation.totalExcluded > 1 ? "s" : ""})</span>}
+                </span>
+                <a href={lbcSearchUrl} target="_blank" rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-[13px] font-semibold text-brand hover:text-brand/80 transition-colors">
+                  Voir sur LBC <ExternalLink className="size-3" />
+                </a>
+              </div>
+            )}
+
+            {/* Geo filter */}
+            <div className="border-t border-border pt-3 space-y-2">
+              <div className="flex items-center gap-1.5 text-[13px] font-semibold">
+                <MapPin className="size-3.5 text-brand" /> Cote locale
+              </div>
+              <div className="flex gap-2">
+                <Input type="text" placeholder="Ville ou code postal" value={geoCity}
+                  onChange={(e) => setGeoCity(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleGeoFilter()}
+                  className="h-8 text-[12px] flex-1" />
+                <select value={geoRadius} onChange={(e) => setGeoRadius(Number(e.target.value))}
+                  className="h-8 rounded-[8px] border border-border bg-white px-2 text-[12px] font-medium">
+                  <option value={25}>25 km</option><option value={50}>50 km</option>
+                  <option value={100}>100 km</option><option value={200}>200 km</option>
+                </select>
+              </div>
+              <div className="flex gap-2">
+                <Button size="sm" onClick={handleGeoFilter} disabled={geoLoading || !geoCity.trim()}
+                  className="h-7 gap-1 text-[11px] bg-primary text-primary-foreground">
+                  {geoLoading ? <RefreshCw className="size-3 animate-spin" /> : <MapPin className="size-3" />} Rechercher
+                </Button>
+                {geoCoords && (
+                  <Button size="sm" variant="ghost" onClick={() => setGeoCoords(null)} className="h-7 text-[11px] text-muted-foreground">
+                    Réinitialiser
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            {/* Refresh */}
+            <Button variant="outline" size="sm" onClick={fetchValuation} disabled={loading} className="w-full gap-1.5 text-[12px]">
+              <RefreshCw className={`size-3 ${loading ? "animate-spin" : ""}`} /> Actualiser la cote
+            </Button>
+
+            {/* Last update */}
+            {lastSavedAt && (
+              <p className="text-[11px] font-medium text-muted-foreground text-center">
+                Dernière mise à jour : {formatRelativeTime(lastSavedAt)}
+              </p>
+            )}
+
+            {/* Ads — scrollable */}
+            {valuation && displayAds.length > 0 && (
+              <div className="border-t border-border pt-3">
+                <button onClick={() => setAdsOpen(!adsOpen)}
+                  className="flex w-full items-center justify-between py-1 text-[13px] font-semibold text-foreground hover:text-brand transition-colors">
+                  <span>Voir les {displayAds.length} annonces{geoCoords ? ` (${geoCoords.label} ${geoRadius}km)` : ""}</span>
+                  <ChevronDown className={`size-4 text-muted-foreground transition-transform duration-200 ${adsOpen ? "rotate-180" : ""}`} />
+                </button>
+                {adsOpen && (
+                  <div className="mt-3 max-h-[400px] overflow-y-auto space-y-2 pr-1">
+                    {displayAds.map((ad, idx) => {
+                      const isInactive = (ad as typeof ad & { is_active?: boolean }).is_active === false;
+                      const lastPrice = (ad as typeof ad & { last_price?: number }).last_price;
+                      const priceChanged = lastPrice && lastPrice > 0 && ad.price !== lastPrice;
+                      const priceDrop = priceChanged && ad.price < (lastPrice ?? 0);
+                      const priceColor = isInactive ? "text-muted-foreground"
+                        : ad.price > valuation.medianPrice * 1.05 ? "text-destructive"
+                        : ad.price < valuation.medianPrice * 0.95 ? "text-positive" : "text-foreground";
+
+                      return (
+                        <div key={`${ad.id}-${idx}`} className={`flex items-center gap-3 rounded-xl border border-border p-2.5 transition-colors ${
+                          isInactive ? "bg-muted/30 opacity-60" : "bg-white hover:bg-muted/30"
+                        }`}>
+                          <div className="size-16 shrink-0 overflow-hidden rounded-lg bg-muted">
+                            {ad.image ? <img src={ad.image} alt={ad.title} className={`size-full object-cover ${isInactive ? "grayscale" : ""}`} />
+                              : <div className="flex size-full items-center justify-center"><CarFront className="size-6 text-muted-foreground/20" strokeWidth={1} /></div>}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <p className="truncate text-[13px] font-semibold">{ad.title}</p>
+                              {isInactive && <span className="shrink-0 rounded-[4px] bg-destructive/10 px-1.5 py-0.5 text-[10px] font-bold text-destructive">Retirée</span>}
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              {priceChanged && <span className="text-[12px] font-mono tabular-nums line-through text-muted-foreground">{fmtEur(lastPrice!)}</span>}
+                              {priceChanged && <span className={`text-[11px] ${priceDrop ? "text-positive" : "text-destructive"}`}>→</span>}
+                              <p className={`text-[14px] font-mono font-bold tabular-nums ${priceColor}`}>{fmtEur(ad.price)}</p>
+                            </div>
+                            <p className="text-[11px] font-medium text-muted-foreground">
+                              {[ad.mileage ? `${new Intl.NumberFormat("fr-FR").format(ad.mileage)} km` : null, ad.year ? String(ad.year) : null,
+                                ad.distance != null ? `${ad.location ?? ""} (${ad.distance} km)` : ad.location ?? null].filter(Boolean).join(" · ")}
+                            </p>
+                          </div>
+                          <a href={ad.url} target="_blank" rel="noopener noreferrer"
+                            className={`shrink-0 rounded-lg px-2.5 py-1.5 text-[12px] font-semibold transition-colors ${isInactive ? "text-muted-foreground" : "text-brand hover:bg-brand/10"}`}>
+                            Voir
+                          </a>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        )}
       </CardContent>
     </Card>
   );
+}
+
+// ── Helpers ─────────────────────────────────────────────────
+
+function fmtEur(v: number) {
+  return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(v);
+}
+
+function formatRelativeTime(isoDate: string): string {
+  const diff = Date.now() - new Date(isoDate).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "à l'instant";
+  if (mins < 60) return `il y a ${mins} min`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `il y a ${hours}h`;
+  return new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(isoDate));
+}
+
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 // ── Sale Simulator Card ────────────────────────────────────
@@ -1601,466 +1853,5 @@ function SaleSimulatorCard({
         )}
       </CardContent>
     </Card>
-  );
-}
-
-// ── Market Valuation Card ──────────────────────────────────
-
-function MarketValuationCard({
-  vehicleId,
-  targetSalePrice,
-  brand,
-  model,
-}: {
-  vehicleId: string;
-  targetSalePrice: number | null;
-  brand: string;
-  model: string;
-}) {
-  const [valuation, setValuation] = useState<MarketValuation | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function fetchValuation() {
-    setLoading(true);
-    setError(null);
-    const result = await getVehicleValuation(vehicleId);
-    if (result.error) {
-      setError(result.error);
-    } else if (result.data) {
-      setValuation(result.data);
-    }
-    setLoading(false);
-  }
-
-  // On mount: load from DB cache first, fetch LBC only if nothing cached
-  useEffect(() => {
-    async function loadOrFetch() {
-      setLoading(true);
-      const cached = await getCachedValuation(vehicleId);
-      if (cached.data && cached.data.totalAds > 0) {
-        setValuation(cached.data);
-        setLoading(false);
-      } else {
-        setLoading(false);
-        fetchValuation();
-      }
-    }
-    loadOrFetch();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vehicleId]);
-
-  // Build Leboncoin search URL
-  const lbcSearchUrl = valuation
-    ? `https://www.leboncoin.fr/recherche?category=2&text=${encodeURIComponent(`${brand} ${model}`)}`
-    : null;
-
-  // Comparison with target price
-  const delta = targetSalePrice && valuation
-    ? targetSalePrice - valuation.medianPrice * 100 // medianPrice is in euros, target is centimes
-    : null;
-
-  return (
-    <Card className="border-border">
-      <CardHeader className="pb-2">
-        <CardTitle className="flex items-center gap-2 text-[16px] font-semibold tracking-tight">
-          <Search className="size-4 text-brand" />
-          Cote Marché Leboncoin
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {loading && (
-          <div className="space-y-3">
-            <div className="h-10 animate-pulse rounded-xl bg-muted" />
-            <div className="h-4 w-3/4 animate-pulse rounded bg-muted" />
-            <div className="h-4 w-1/2 animate-pulse rounded bg-muted" />
-          </div>
-        )}
-
-        {error && !loading && (
-          <div className="flex flex-col items-center gap-2 py-4 text-center">
-            <AlertTriangle className="size-8 text-muted-foreground/30" strokeWidth={1.5} />
-            <p className="text-[13px] font-semibold text-muted-foreground">Cote indisponible</p>
-            <p className="text-[12px] text-muted-foreground">{error}</p>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={fetchValuation}
-              className="mt-1 gap-1.5 text-[12px]"
-            >
-              <RefreshCw className="size-3" />
-              Réessayer
-            </Button>
-          </div>
-        )}
-
-        {valuation && !loading && (
-          <MarketValuationContent
-            valuation={valuation}
-            delta={delta}
-            lbcSearchUrl={lbcSearchUrl}
-            loading={loading}
-            onRefresh={fetchValuation}
-            vehicleId={vehicleId}
-          />
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-// ── Relative time ───────────────────────────────────────────
-
-function formatRelativeTime(isoDate: string): string {
-  const diff = Date.now() - new Date(isoDate).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "à l'instant";
-  if (mins < 60) return `il y a ${mins} min`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `il y a ${hours}h`;
-  return new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(isoDate));
-}
-
-// ── Haversine distance (km) ─────────────────────────────────
-
-function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const R = 6371;
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLng = ((lng2 - lng1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
-function computeStats(prices: number[]) {
-  if (prices.length === 0) return { median: 0, p25: 0, p75: 0, min: 0, max: 0 };
-  const sorted = [...prices].sort((a, b) => a - b);
-  const median = sorted[Math.floor(sorted.length / 2)];
-  const p25 = sorted[Math.floor(sorted.length * 0.25)];
-  const p75 = sorted[Math.floor(sorted.length * 0.75)];
-  return { median, p25, p75, min: sorted[0], max: sorted[sorted.length - 1] };
-}
-
-// ── Market Valuation Content ────────────────────────────────
-
-function MarketValuationContent({
-  valuation,
-  delta,
-  lbcSearchUrl,
-  loading,
-  onRefresh,
-  vehicleId,
-}: {
-  valuation: MarketValuation;
-  delta: number | null;
-  lbcSearchUrl: string | null;
-  loading: boolean;
-  onRefresh: () => void;
-  vehicleId: string;
-}) {
-  const [adsOpen, setAdsOpen] = useState(false);
-  const [showAll, setShowAll] = useState(false);
-  const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
-
-  // Fetch last saved valuation on mount
-  useEffect(() => {
-    getLastValuation(vehicleId).then((result) => {
-      if (result.data?.created_at) {
-        setLastSavedAt(result.data.created_at);
-      }
-    });
-  }, [vehicleId]);
-
-  // Geo filter state
-  const [geoCity, setGeoCity] = useState("");
-  const [geoRadius, setGeoRadius] = useState(100);
-  const [geoCoords, setGeoCoords] = useState<{ lat: number; lng: number; label: string } | null>(null);
-  const [geoLoading, setGeoLoading] = useState(false);
-
-  const fmtEur = (v: number) =>
-    new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(v);
-
-  // Compute distances if geo is active
-  const adsWithDistance = useMemo(() => {
-    return valuation.ads.map((ad) => {
-      const dist = geoCoords && ad.lat && ad.lng
-        ? Math.round(haversineKm(geoCoords.lat, geoCoords.lng, ad.lat, ad.lng))
-        : null;
-      return { ...ad, distance: dist };
-    });
-  }, [valuation.ads, geoCoords]);
-
-  // Filtered ads by geo
-  const geoFilteredAds = useMemo(() => {
-    if (!geoCoords) return adsWithDistance;
-    return adsWithDistance.filter((ad) => ad.distance !== null && ad.distance <= geoRadius);
-  }, [adsWithDistance, geoCoords, geoRadius]);
-
-  // Local stats
-  const localStats = useMemo(() => {
-    if (!geoCoords || geoFilteredAds.length === 0) return null;
-    return computeStats(geoFilteredAds.map((a) => a.price));
-  }, [geoCoords, geoFilteredAds]);
-
-  const sortedAds = [...(geoCoords ? geoFilteredAds : adsWithDistance)].sort((a, b) => {
-    // Inactive ads go to the bottom
-    const aActive = a.is_active !== false;
-    const bActive = b.is_active !== false;
-    if (aActive !== bActive) return aActive ? -1 : 1;
-    return a.price - b.price;
-  });
-  const visibleAds = showAll ? sortedAds : sortedAds.slice(0, 20);
-  const hasMore = sortedAds.length > 20 && !showAll;
-
-  async function handleGeoFilter() {
-    if (!geoCity.trim()) return;
-    setGeoLoading(true);
-    try {
-      const res = await fetch(`https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(geoCity)}&limit=1`);
-      const data = await res.json();
-      if (data.features?.[0]) {
-        const [lng, lat] = data.features[0].geometry.coordinates;
-        const label = data.features[0].properties.city || data.features[0].properties.label || geoCity;
-        setGeoCoords({ lat, lng, label });
-        setShowAll(false);
-      }
-    } catch {
-      // silently fail
-    }
-    setGeoLoading(false);
-  }
-
-  // Save is now automatic on each refresh (server-side)
-
-  return (
-    <>
-      {/* Median price */}
-      <div className="rounded-xl bg-muted/50 px-4 py-3 text-center">
-        <p className="text-[12px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">
-          Prix médian
-        </p>
-        <p className="text-[28px] font-mono font-bold tracking-tight tabular-nums text-foreground">
-          {fmtEur(valuation.medianPrice)}
-        </p>
-      </div>
-
-      {/* Comparison: national vs local */}
-      {localStats && geoCoords && (
-        <div className="grid grid-cols-2 gap-2 text-center">
-          <div className="rounded-lg bg-muted/30 px-2 py-2">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">France</p>
-            <p className="text-[15px] font-mono font-bold tabular-nums">{fmtEur(valuation.medianPrice)}</p>
-            <p className="text-[10px] font-medium text-muted-foreground">{valuation.totalAds} ann.</p>
-          </div>
-          <div className="rounded-lg bg-brand/5 border border-brand/20 px-2 py-2">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-brand">{geoCoords.label} {geoRadius}km</p>
-            <p className="text-[15px] font-mono font-bold tabular-nums">{fmtEur(localStats.median)}</p>
-            <p className="text-[10px] font-medium text-muted-foreground">{geoFilteredAds.length} ann.</p>
-          </div>
-        </div>
-      )}
-
-      {/* P25 — P75 fourchette */}
-      <div className="flex items-center justify-between text-[13px] font-semibold">
-        <span className="text-muted-foreground">Fourchette</span>
-        <span className="font-mono tabular-nums">{fmtEur(valuation.p25)} — {fmtEur(valuation.p75)}</span>
-      </div>
-
-      {/* Min — Max (smaller) */}
-      <div className="flex items-center justify-between text-[12px] font-medium text-muted-foreground">
-        <span>Min {fmtEur(valuation.minPrice)}</span>
-        <span className="text-border">—</span>
-        <span>Max {fmtEur(valuation.maxPrice)}</span>
-      </div>
-
-      {/* Ad count */}
-      <div className="flex items-center justify-between">
-        <span className="text-[13px] font-medium text-muted-foreground">
-          {valuation.totalAds} annonce{valuation.totalAds > 1 ? "s" : ""} analysée{valuation.totalAds > 1 ? "s" : ""}
-          {valuation.totalExcluded > 0 && (
-            <span className="text-[12px]"> ({valuation.totalExcluded} exclue{valuation.totalExcluded > 1 ? "s" : ""})</span>
-          )}
-        </span>
-        {lbcSearchUrl && (
-          <a href={lbcSearchUrl} target="_blank" rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-[13px] font-semibold text-brand hover:text-brand/80 transition-colors">
-            Voir sur LBC <ExternalLink className="size-3" />
-          </a>
-        )}
-      </div>
-
-      {/* Comparison badge */}
-      {delta !== null && (
-        <div className={`rounded-lg px-3 py-2 text-[13px] font-semibold ${
-          delta >= 0 ? "bg-positive/10 text-positive" : "bg-destructive/10 text-destructive"
-        }`}>
-          {delta >= 0
-            ? `Au-dessus du marché (+${formatPrice(delta)})`
-            : `En-dessous du marché (${formatPrice(delta)})`}
-        </div>
-      )}
-
-      {/* Geo filter section */}
-      <div className="border-t border-border pt-3 space-y-2">
-        <div className="flex items-center gap-1.5 text-[13px] font-semibold">
-          <MapPin className="size-3.5 text-brand" />
-          Cote locale
-        </div>
-        <div className="flex gap-2">
-          <Input
-            type="text"
-            placeholder="Ville ou code postal"
-            value={geoCity}
-            onChange={(e) => setGeoCity(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleGeoFilter()}
-            className="h-8 text-[12px] flex-1"
-          />
-          <select
-            value={geoRadius}
-            onChange={(e) => { setGeoRadius(Number(e.target.value)); if (geoCoords) setShowAll(false); }}
-            className="h-8 rounded-[8px] border border-border bg-white px-2 text-[12px] font-medium"
-          >
-            <option value={25}>25 km</option>
-            <option value={50}>50 km</option>
-            <option value={100}>100 km</option>
-            <option value={200}>200 km</option>
-          </select>
-        </div>
-        <div className="flex gap-2">
-          <Button size="sm" onClick={handleGeoFilter} disabled={geoLoading || !geoCity.trim()}
-            className="h-7 gap-1 text-[11px] bg-primary text-primary-foreground">
-            {geoLoading ? <RefreshCw className="size-3 animate-spin" /> : <MapPin className="size-3" />}
-            Rechercher
-          </Button>
-          {geoCoords && (
-            <Button size="sm" variant="ghost" onClick={() => { setGeoCoords(null); setShowAll(false); }}
-              className="h-7 text-[11px] text-muted-foreground">
-              Réinitialiser
-            </Button>
-          )}
-        </div>
-      </div>
-
-      {/* Tracking counters */}
-      {(valuation.newAds || valuation.removedAds) && (
-        <div className="flex items-center gap-3 text-[12px] font-semibold">
-          {valuation.newAds && valuation.newAds > 0 && (
-            <span className="text-positive">+{valuation.newAds} nouvelle{valuation.newAds > 1 ? "s" : ""}</span>
-          )}
-          {valuation.removedAds && valuation.removedAds > 0 && (
-            <span className="text-muted-foreground">-{valuation.removedAds} retirée{valuation.removedAds > 1 ? "s" : ""}</span>
-          )}
-        </div>
-      )}
-
-      {/* Refresh button */}
-      <Button variant="outline" size="sm" onClick={onRefresh} disabled={loading} className="w-full gap-1.5 text-[12px]">
-        <RefreshCw className={`size-3 ${loading ? "animate-spin" : ""}`} />
-        Actualiser la cote
-      </Button>
-
-      {/* Last update date */}
-      <p className="text-[11px] font-medium text-muted-foreground text-center">
-        {lastSavedAt
-          ? `Dernière mise à jour : ${formatRelativeTime(lastSavedAt)}`
-          : valuation.fetchedAt
-            ? `Mis à jour : ${formatRelativeTime(valuation.fetchedAt)}`
-            : null}
-      </p>
-
-      {/* Ads accordion */}
-      {sortedAds.length > 0 && (
-        <div className="border-t border-border pt-3">
-          <button
-            onClick={() => setAdsOpen(!adsOpen)}
-            className="flex w-full items-center justify-between py-1 text-[13px] font-semibold text-foreground transition-colors hover:text-brand"
-          >
-            <span>Voir les {sortedAds.length} annonces{geoCoords ? ` (${geoCoords.label} ${geoRadius}km)` : ""}</span>
-            <ChevronDown className={`size-4 text-muted-foreground transition-transform duration-200 ${adsOpen ? "rotate-180" : ""}`} />
-          </button>
-
-          {adsOpen && (
-            <div className="mt-3 space-y-2">
-              {visibleAds.map((ad, idx) => {
-                const isInactive = ad.is_active === false;
-                const priceChanged = ad.last_price && ad.last_price > 0 && ad.price !== ad.last_price;
-                const priceDrop = priceChanged && ad.price < (ad.last_price ?? 0);
-                const priceColor = isInactive
-                  ? "text-muted-foreground"
-                  : ad.price > valuation.medianPrice * 1.05
-                    ? "text-destructive"
-                    : ad.price < valuation.medianPrice * 0.95
-                      ? "text-positive"
-                      : "text-foreground";
-
-                return (
-                  <div key={`${ad.id}-${idx}`} className={`flex items-center gap-3 rounded-xl border border-border p-2.5 transition-colors ${
-                    isInactive ? "bg-muted/30 opacity-60" : "bg-white hover:bg-muted/30"
-                  }`}>
-                    <div className="size-16 shrink-0 overflow-hidden rounded-lg bg-muted">
-                      {ad.image ? (
-                        <img src={ad.image} alt={ad.title} className={`size-full object-cover ${isInactive ? "grayscale" : ""}`} />
-                      ) : (
-                        <div className="flex size-full items-center justify-center">
-                          <CarFront className="size-6 text-muted-foreground/20" strokeWidth={1} />
-                        </div>
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <p className="truncate text-[13px] font-semibold">{ad.title}</p>
-                        {isInactive && (
-                          <span className="shrink-0 rounded-[4px] bg-destructive/10 px-1.5 py-0.5 text-[10px] font-bold text-destructive">
-                            Retirée
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        {priceChanged && (
-                          <span className={`text-[12px] font-mono tabular-nums line-through ${priceDrop ? "text-muted-foreground" : "text-muted-foreground"}`}>
-                            {fmtEur(ad.last_price!)}
-                          </span>
-                        )}
-                        {priceChanged && (
-                          <span className={`text-[11px] ${priceDrop ? "text-positive" : "text-destructive"}`}>→</span>
-                        )}
-                        <p className={`text-[14px] font-mono font-bold tabular-nums ${priceColor}`}>
-                          {fmtEur(ad.price)}
-                        </p>
-                      </div>
-                      <p className="text-[11px] font-medium text-muted-foreground">
-                        {[
-                          ad.mileage ? `${new Intl.NumberFormat("fr-FR").format(ad.mileage)} km` : null,
-                          ad.year ? String(ad.year) : null,
-                          ad.distance !== null && ad.distance !== undefined
-                            ? `${ad.location ?? ""} (${ad.distance} km)`
-                            : ad.location ?? null,
-                        ].filter(Boolean).join(" · ")}
-                      </p>
-                    </div>
-                    <a href={ad.url} target="_blank" rel="noopener noreferrer"
-                      className={`shrink-0 rounded-lg px-2.5 py-1.5 text-[12px] font-semibold transition-colors ${
-                        isInactive ? "text-muted-foreground" : "text-brand hover:bg-brand/10"
-                      }`}>
-                      Voir
-                    </a>
-                  </div>
-                );
-              })}
-
-              {hasMore && (
-                <button
-                  onClick={() => setShowAll(true)}
-                  className="w-full rounded-xl border border-dashed border-border py-2.5 text-[13px] font-semibold text-muted-foreground transition-colors hover:bg-muted/30 hover:text-foreground"
-                >
-                  Voir les {sortedAds.length - 20} annonces restantes
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-    </>
   );
 }
