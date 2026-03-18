@@ -1917,7 +1917,7 @@ function MarketValuationContent({
           <Button size="sm" onClick={handleGeoFilter} disabled={geoLoading || !geoCity.trim()}
             className="h-7 gap-1 text-[11px] bg-primary text-primary-foreground">
             {geoLoading ? <RefreshCw className="size-3 animate-spin" /> : <MapPin className="size-3" />}
-            Filtrer
+            Rechercher
           </Button>
           {geoCoords && (
             <Button size="sm" variant="ghost" onClick={() => { setGeoCoords(null); setShowAll(false); }}
