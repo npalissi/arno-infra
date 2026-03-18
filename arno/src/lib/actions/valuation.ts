@@ -43,23 +43,61 @@ export async function getVehicleValuation(
 
   console.log("[LBC ACTION] getVehicleValuation pour:", vehicle.brand, vehicle.model, "→ model normalise:", model, "| fuel:", vehicle.fuel_type, "→", fuel, "| gearbox:", vehicle.gearbox, "→", gearbox);
 
-  try {
-    const valuation = await getMarketValuation(
-      {
-        brand: vehicle.brand,
-        model,
-        yearMin: vehicle.year - 1,
-        yearMax: vehicle.year + 1,
-        mileageMin: Math.max(0, vehicle.mileage - 20000),
-        mileageMax: vehicle.mileage + 20000,
-        fuel,
-        gearbox,
+  // Progressive search: start strict, widen if 0 results
+  const searchStrategies = [
+    // 1. Strict: year ±1, km ±20k, fuel + gearbox
+    {
+      label: "strict",
+      params: {
+        brand: vehicle.brand, model,
+        yearMin: vehicle.year - 1, yearMax: vehicle.year + 1,
+        mileageMin: Math.max(0, vehicle.mileage - 20000), mileageMax: vehicle.mileage + 20000,
+        fuel, gearbox,
       },
-      vehicle.purchase_price,
-    );
+    },
+    // 2. Medium: year ±3, km ±50k, fuel only (no gearbox)
+    {
+      label: "medium",
+      params: {
+        brand: vehicle.brand, model,
+        yearMin: vehicle.year - 3, yearMax: vehicle.year + 3,
+        mileageMin: Math.max(0, vehicle.mileage - 50000), mileageMax: vehicle.mileage + 50000,
+        fuel,
+      },
+    },
+    // 3. Wide: year ±5, no km filter, no gearbox, no fuel
+    {
+      label: "wide",
+      params: {
+        brand: vehicle.brand, model,
+        yearMin: vehicle.year - 5, yearMax: vehicle.year + 5,
+      },
+    },
+  ];
 
-    console.log("[LBC ACTION] Resultat:", valuation.totalAds, "annonces, median:", valuation.medianPrice, "€");
-    return { data: valuation, error: null };
+  try {
+    for (const strategy of searchStrategies) {
+      console.log(`[LBC ACTION] Essai ${strategy.label}:`, JSON.stringify(strategy.params));
+      const valuation = await getMarketValuation(strategy.params, vehicle.purchase_price);
+
+      if (valuation.totalAds > 0) {
+        console.log(`[LBC ACTION] ${strategy.label} OK:`, valuation.totalAds, "annonces, median:", valuation.medianPrice, "€");
+        return { data: valuation, error: null };
+      }
+
+      console.log(`[LBC ACTION] ${strategy.label}: 0 annonces, elargissement...`);
+    }
+
+    // All strategies returned 0
+    console.log("[LBC ACTION] Aucune annonce trouvee meme en elargissant");
+    return {
+      data: {
+        medianPrice: 0, minPrice: 0, maxPrice: 0, avgPrice: 0,
+        p25: 0, p75: 0, totalAds: 0, totalBeforeFilter: 0, totalExcluded: 0,
+        ads: [], searchParams: searchStrategies[2]!.params, fetchedAt: new Date().toISOString(),
+      },
+      error: null,
+    };
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Erreur recherche Leboncoin';
     console.error("[LBC ACTION] ERREUR:", msg);
