@@ -84,9 +84,17 @@ export async function getVehicleValuation(
       if (valuation.totalAds > 0) {
         console.log(`[LBC ACTION] ${strategy.label} OK:`, valuation.totalAds, "annonces, median:", valuation.medianPrice, "€");
         // Auto-save to DB
-        saveValuation(vehicleId, valuation).catch((e) =>
-          console.error("[LBC ACTION] Auto-save failed:", e),
-        );
+        console.log("[LBC ACTION] Auto-saving to DB for vehicle:", vehicleId);
+        try {
+          const saveResult = await saveValuation(vehicleId, valuation);
+          if (saveResult.error) {
+            console.error("[LBC ACTION] Auto-save DB error:", saveResult.error);
+          } else {
+            console.log("[LBC ACTION] Auto-save OK");
+          }
+        } catch (saveErr) {
+          console.error("[LBC ACTION] Auto-save exception:", saveErr);
+        }
         return { data: valuation, error: null };
       }
 
@@ -141,7 +149,96 @@ export async function saveValuation(
       geo_label: geo?.label ?? null,
     });
 
-  if (error) return { data: null, error: error.message };
+  if (error) {
+    console.error("[SAVE] Stats insert error:", error.message);
+    return { data: null, error: error.message };
+  }
+
+  // Sync individual ads into valuation_ads
+  if (valuation.ads && valuation.ads.length > 0) {
+    const currentLbcIds = valuation.ads.map((ad) => ad.id);
+
+    // Get existing ads for this vehicle to track price changes
+    const { data: existingAds } = await supabase
+      .from('valuation_ads')
+      .select('lbc_id, price')
+      .eq('vehicle_id', vehicleId) as unknown as {
+      data: { lbc_id: number; price: number }[] | null;
+    };
+
+    const existingMap = new Map<number, number>();
+    if (existingAds) {
+      for (const ad of existingAds) {
+        existingMap.set(ad.lbc_id, ad.price);
+      }
+    }
+
+    // Upsert each ad — if exists, last_price = old price from DB
+    for (const ad of valuation.ads) {
+      const newPriceCents = Math.round(ad.price * 100);
+      const oldPriceCents = existingMap.get(ad.id);
+      const isExisting = oldPriceCents !== undefined;
+
+      if (isExisting) {
+        // Update existing — set last_price to old price, update current price
+        await supabase
+          .from('valuation_ads')
+          .update({
+            title: ad.title,
+            last_price: oldPriceCents,
+            price: newPriceCents,
+            url: ad.url,
+            mileage: ad.mileage ?? null,
+            year: ad.year ?? null,
+            fuel: ad.fuel ?? null,
+            location: ad.location ?? null,
+            lat: ad.lat ?? null,
+            lng: ad.lng ?? null,
+            image: ad.image ?? null,
+            last_seen_at: new Date().toISOString(),
+            is_active: true,
+          })
+          .eq('vehicle_id', vehicleId)
+          .eq('lbc_id', ad.id);
+      } else {
+        // Insert new ad
+        await supabase
+          .from('valuation_ads')
+          .insert({
+            vehicle_id: vehicleId,
+            lbc_id: ad.id,
+            title: ad.title,
+            price: newPriceCents,
+            last_price: newPriceCents,
+            url: ad.url,
+            mileage: ad.mileage ?? null,
+            year: ad.year ?? null,
+            fuel: ad.fuel ?? null,
+            location: ad.location ?? null,
+            department: ad.department ?? null,
+            lat: ad.lat ?? null,
+            lng: ad.lng ?? null,
+            image: ad.image ?? null,
+            is_active: true,
+          });
+      }
+    }
+
+    // Mark ads not in current fetch as inactive
+    const { error: deactivateError } = await supabase
+      .from('valuation_ads')
+      .update({ is_active: false, last_seen_at: new Date().toISOString() })
+      .eq('vehicle_id', vehicleId)
+      .eq('is_active', true)
+      .not('lbc_id', 'in', `(${currentLbcIds.join(',')})`);
+
+    if (deactivateError) {
+      console.error("[SAVE] Deactivate error:", deactivateError.message);
+    }
+
+    const newCount = valuation.ads.filter((a) => !existingMap.has(a.id)).length;
+    console.log(`[SAVE] ${valuation.ads.length} ads synced (${newCount} new), inactive marked`);
+  }
 
   revalidatePath(`/vehicles/${vehicleId}`);
   return { data: null, error: null };
