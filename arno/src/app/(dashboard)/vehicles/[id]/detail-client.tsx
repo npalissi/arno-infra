@@ -31,6 +31,8 @@ import {
   Search,
   AlertTriangle,
   RefreshCw,
+  ChevronDown,
+  Car,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -1681,69 +1683,188 @@ function MarketValuationCard({
         )}
 
         {valuation && !loading && (
-          <>
-            {/* Median price */}
-            <div className="rounded-xl bg-muted/50 px-4 py-3 text-center">
-              <p className="text-[12px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">
-                Prix médian
-              </p>
-              <p className="text-[28px] font-mono font-bold tracking-tight tabular-nums text-foreground">
-                {new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(valuation.medianPrice)}
-              </p>
-            </div>
-
-            {/* Min — Max range */}
-            <div className="flex items-center justify-between text-[13px] font-medium text-muted-foreground">
-              <span>Min {new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(valuation.minPrice)}</span>
-              <span className="text-border">—</span>
-              <span>Max {new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(valuation.maxPrice)}</span>
-            </div>
-
-            {/* Ad count + link */}
-            <div className="flex items-center justify-between">
-              <span className="text-[13px] font-medium text-muted-foreground">
-                Basé sur {valuation.totalAds} annonce{valuation.totalAds > 1 ? "s" : ""}
-              </span>
-              {lbcSearchUrl && (
-                <a
-                  href={lbcSearchUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-[13px] font-semibold text-brand hover:text-brand/80 transition-colors"
-                >
-                  Voir sur LBC
-                  <ExternalLink className="size-3" />
-                </a>
-              )}
-            </div>
-
-            {/* Comparison badge */}
-            {delta !== null && (
-              <div className={`rounded-lg px-3 py-2 text-[13px] font-semibold ${
-                delta >= 0
-                  ? "bg-positive/10 text-positive"
-                  : "bg-destructive/10 text-destructive"
-              }`}>
-                {delta >= 0
-                  ? `Au-dessus du marché (+${formatPrice(delta)})`
-                  : `En-dessous du marché (${formatPrice(delta)})`}
-              </div>
-            )}
-
-            {/* Refresh button */}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={fetchValuation}
-              disabled={loading}
-              className="w-full gap-1.5 text-[12px]"
-            >
-              <RefreshCw className={`size-3 ${loading ? "animate-spin" : ""}`} />
-              Actualiser la cote
-            </Button>
-          </>
+          <MarketValuationContent
+            valuation={valuation}
+            delta={delta}
+            lbcSearchUrl={lbcSearchUrl}
+            loading={loading}
+            onRefresh={fetchValuation}
+          />
         )}
       </CardContent>
     </Card>
+  );
+}
+
+// ── Market Valuation Content ────────────────────────────────
+
+function MarketValuationContent({
+  valuation,
+  delta,
+  lbcSearchUrl,
+  loading,
+  onRefresh,
+}: {
+  valuation: MarketValuation;
+  delta: number | null;
+  lbcSearchUrl: string | null;
+  loading: boolean;
+  onRefresh: () => void;
+}) {
+  const [adsOpen, setAdsOpen] = useState(false);
+  const [showAll, setShowAll] = useState(false);
+
+  const fmtEur = (v: number) =>
+    new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(v);
+
+  const sortedAds = [...valuation.ads].sort((a, b) => a.price - b.price);
+  const visibleAds = showAll ? sortedAds : sortedAds.slice(0, 20);
+  const hasMore = sortedAds.length > 20 && !showAll;
+
+  return (
+    <>
+      {/* Median price */}
+      <div className="rounded-xl bg-muted/50 px-4 py-3 text-center">
+        <p className="text-[12px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">
+          Prix médian
+        </p>
+        <p className="text-[28px] font-mono font-bold tracking-tight tabular-nums text-foreground">
+          {fmtEur(valuation.medianPrice)}
+        </p>
+      </div>
+
+      {/* P25 — P75 fourchette */}
+      <div className="flex items-center justify-between text-[13px] font-semibold">
+        <span className="text-muted-foreground">Fourchette</span>
+        <span className="font-mono tabular-nums">{fmtEur(valuation.p25)} — {fmtEur(valuation.p75)}</span>
+      </div>
+
+      {/* Min — Max (smaller) */}
+      <div className="flex items-center justify-between text-[12px] font-medium text-muted-foreground">
+        <span>Min {fmtEur(valuation.minPrice)}</span>
+        <span className="text-border">—</span>
+        <span>Max {fmtEur(valuation.maxPrice)}</span>
+      </div>
+
+      {/* Ad count */}
+      <div className="flex items-center justify-between">
+        <span className="text-[13px] font-medium text-muted-foreground">
+          {valuation.totalAds} annonce{valuation.totalAds > 1 ? "s" : ""} analysée{valuation.totalAds > 1 ? "s" : ""}
+          {valuation.totalExcluded > 0 && (
+            <span className="text-[12px]"> ({valuation.totalExcluded} exclue{valuation.totalExcluded > 1 ? "s" : ""})</span>
+          )}
+        </span>
+        {lbcSearchUrl && (
+          <a
+            href={lbcSearchUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-[13px] font-semibold text-brand hover:text-brand/80 transition-colors"
+          >
+            Voir sur LBC
+            <ExternalLink className="size-3" />
+          </a>
+        )}
+      </div>
+
+      {/* Comparison badge */}
+      {delta !== null && (
+        <div className={`rounded-lg px-3 py-2 text-[13px] font-semibold ${
+          delta >= 0
+            ? "bg-positive/10 text-positive"
+            : "bg-destructive/10 text-destructive"
+        }`}>
+          {delta >= 0
+            ? `Au-dessus du marché (+${formatPrice(delta)})`
+            : `En-dessous du marché (${formatPrice(delta)})`}
+        </div>
+      )}
+
+      {/* Refresh button */}
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={onRefresh}
+        disabled={loading}
+        className="w-full gap-1.5 text-[12px]"
+      >
+        <RefreshCw className={`size-3 ${loading ? "animate-spin" : ""}`} />
+        Actualiser la cote
+      </Button>
+
+      {/* Ads accordion */}
+      {sortedAds.length > 0 && (
+        <div className="border-t border-border pt-3">
+          <button
+            onClick={() => setAdsOpen(!adsOpen)}
+            className="flex w-full items-center justify-between py-1 text-[13px] font-semibold text-foreground transition-colors hover:text-brand"
+          >
+            <span>Voir les {sortedAds.length} annonces</span>
+            <ChevronDown className={`size-4 text-muted-foreground transition-transform duration-200 ${adsOpen ? "rotate-180" : ""}`} />
+          </button>
+
+          {adsOpen && (
+            <div className="mt-3 space-y-2">
+              {visibleAds.map((ad) => {
+                const priceColor = ad.price > valuation.medianPrice * 1.05
+                  ? "text-destructive"
+                  : ad.price < valuation.medianPrice * 0.95
+                    ? "text-positive"
+                    : "text-foreground";
+
+                return (
+                  <div key={ad.id} className="flex items-center gap-3 rounded-xl border border-border bg-white p-2.5 transition-colors hover:bg-muted/30">
+                    {/* Thumbnail */}
+                    <div className="size-16 shrink-0 overflow-hidden rounded-lg bg-muted">
+                      {ad.image ? (
+                        <img src={ad.image} alt={ad.title} className="size-full object-cover" />
+                      ) : (
+                        <div className="flex size-full items-center justify-center">
+                          <Car className="size-6 text-muted-foreground/20" strokeWidth={1} />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Info */}
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[13px] font-semibold">{ad.title}</p>
+                      <p className={`text-[14px] font-mono font-bold tabular-nums ${priceColor}`}>
+                        {fmtEur(ad.price)}
+                      </p>
+                      <p className="text-[11px] font-medium text-muted-foreground">
+                        {[
+                          ad.mileage ? `${new Intl.NumberFormat("fr-FR").format(ad.mileage)} km` : null,
+                          ad.year ? String(ad.year) : null,
+                          ad.location ?? null,
+                        ].filter(Boolean).join(" · ")}
+                      </p>
+                    </div>
+
+                    {/* Link */}
+                    <a
+                      href={ad.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="shrink-0 rounded-lg px-2.5 py-1.5 text-[12px] font-semibold text-brand transition-colors hover:bg-brand/10"
+                    >
+                      Voir
+                    </a>
+                  </div>
+                );
+              })}
+
+              {hasMore && (
+                <button
+                  onClick={() => setShowAll(true)}
+                  className="w-full rounded-xl border border-dashed border-border py-2.5 text-[13px] font-semibold text-muted-foreground transition-colors hover:bg-muted/30 hover:text-foreground"
+                >
+                  Voir les {sortedAds.length - 20} annonces restantes
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </>
   );
 }
