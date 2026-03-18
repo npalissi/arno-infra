@@ -1322,6 +1322,7 @@ export function VehicleDetailClient({
             targetSalePrice={vehicle.target_sale_price}
             brand={vehicle.brand}
             model={vehicle.model}
+            year={vehicle.year}
             onValuationRefreshed={() => setAdsRefreshKey((k) => k + 1)}
           />
         )}
@@ -1417,6 +1418,7 @@ function EstimationCard({
   targetSalePrice,
   brand,
   model,
+  year,
   onValuationRefreshed,
 }: {
   vehicleId: string;
@@ -1424,6 +1426,7 @@ function EstimationCard({
   targetSalePrice: number | null;
   brand: string;
   model: string;
+  year: number;
   onValuationRefreshed?: () => void;
 }) {
   const [valuation, setValuation] = useState<MarketValuation | null>(null);
@@ -1431,6 +1434,7 @@ function EstimationCard({
   const [error, setError] = useState<string | null>(null);
   const [marginTarget, setMarginTarget] = useState(15);
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
+  const [exactYear, setExactYear] = useState(false);
 
   // Geo filter
   const [geoCity, setGeoCity] = useState("");
@@ -1468,9 +1472,22 @@ function EstimationCard({
     loadOrFetch();
   }, [vehicleId]);
 
-  // Prix suggéré = LBC median (in centimes) or fallback formula
+  // Filter ads by exact year if toggled
+  const filteredAds = useMemo(() => {
+    if (!valuation) return [];
+    if (!exactYear) return valuation.ads;
+    return valuation.ads.filter((ad) => ad.year === year);
+  }, [valuation, exactYear, year]);
+
+  const filteredMedian = useMemo(() => {
+    if (filteredAds.length === 0) return valuation?.medianPrice ?? 0;
+    const prices = filteredAds.map((a) => a.price).sort((a, b) => a - b);
+    return prices[Math.floor(prices.length / 2)] ?? 0;
+  }, [filteredAds, valuation]);
+
+  // Prix suggéré = filtered LBC median (in centimes) or fallback formula
   const suggestedPrice = valuation
-    ? Math.round(valuation.medianPrice * 100) // euros → centimes
+    ? Math.round(filteredMedian * 100) // euros → centimes
     : (() => { const d = 1 - (marginTarget * 1.2) / 100; return d > 0 ? Math.round(totalCost / d) : 0; })();
 
   // Projected margins at suggested price
@@ -1628,6 +1645,27 @@ function EstimationCard({
                   Voir sur LBC <ExternalLink className="size-3" />
                 </a>
               </div>
+            )}
+
+            {/* Year filter */}
+            {valuation && (
+              <div className="flex items-center justify-between border-t border-border pt-3">
+                <div className="flex items-center gap-1.5 text-[13px] font-semibold">
+                  <Calendar className="size-3.5 text-brand" />
+                  Année exacte ({year})
+                </div>
+                <button
+                  onClick={() => setExactYear(!exactYear)}
+                  className={`relative h-5 w-9 rounded-full transition-colors ${exactYear ? "bg-brand" : "bg-muted"}`}
+                >
+                  <span className={`absolute top-0.5 left-0.5 size-4 rounded-full bg-white shadow transition-transform ${exactYear ? "translate-x-4" : ""}`} />
+                </button>
+              </div>
+            )}
+            {exactYear && valuation && (
+              <p className="text-[11px] font-medium text-muted-foreground">
+                {filteredAds.length} annonce{filteredAds.length > 1 ? "s" : ""} de {year} (sur {valuation.totalAds} total)
+              </p>
             )}
 
             {/* Geo filter */}
