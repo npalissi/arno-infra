@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { Bell, Home, LayoutGrid, BarChart3, Settings, Plus } from "lucide-react";
+import { Bell, Home, LayoutGrid, TrendingUp, BarChart3, Settings, Plus } from "lucide-react";
 import { Sidebar } from "@/components/layout/sidebar";
 import { ToastProvider } from "@/components/shared/toast";
 import { cn } from "@/lib/utils";
@@ -12,6 +12,7 @@ const pageTitles: Record<string, string> = {
   "/dashboard": "Dashboard",
   "/vehicles": "Inventaire",
   "/vehicles/new": "Nouveau véhicule",
+  "/cote": "Estimation Cote",
   "/reports": "Rapports",
   "/settings": "Paramètres",
 };
@@ -27,8 +28,8 @@ const bottomNavItems = [
   { href: "/dashboard", label: "Dashboard", icon: Home },
   { href: "/vehicles", label: "Véhicules", icon: LayoutGrid },
   { href: "/vehicles/new", label: "Ajouter", icon: Plus, accent: true },
+  { href: "/cote", label: "Cote", icon: TrendingUp },
   { href: "/reports", label: "Rapports", icon: BarChart3 },
-  { href: "/settings", label: "Réglages", icon: Settings },
 ];
 
 export default function DashboardLayout({

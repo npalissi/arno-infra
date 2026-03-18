@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   Home,
   LayoutGrid,
+  TrendingUp,
   BarChart3,
   Settings,
 } from "lucide-react";
@@ -13,6 +14,7 @@ import { cn } from "@/lib/utils";
 const mainNavItems = [
   { href: "/dashboard", label: "Dashboard", icon: Home },
   { href: "/vehicles", label: "Véhicules", icon: LayoutGrid },
+  { href: "/cote", label: "Cote", icon: TrendingUp },
   { href: "/reports", label: "Rapports", icon: BarChart3 },
 ];
 
