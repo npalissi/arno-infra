@@ -83,6 +83,10 @@ export async function getVehicleValuation(
 
       if (valuation.totalAds > 0) {
         console.log(`[LBC ACTION] ${strategy.label} OK:`, valuation.totalAds, "annonces, median:", valuation.medianPrice, "€");
+        // Auto-save to DB
+        saveValuation(vehicleId, valuation).catch((e) =>
+          console.error("[LBC ACTION] Auto-save failed:", e),
+        );
         return { data: valuation, error: null };
       }
 
