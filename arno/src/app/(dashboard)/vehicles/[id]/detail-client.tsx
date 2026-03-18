@@ -1197,10 +1197,6 @@ export function VehicleDetailClient({
             vehicleId={vehicle.id}
             compact
           />
-          {/* LBC ads panel — independent from EstimationCard */}
-          {!vehicle.sale_price && (
-            <LBCAdsPanel vehicleId={vehicle.id} />
-          )}
         </div>
 
         {/* Vehicle information */}
@@ -1326,6 +1322,11 @@ export function VehicleDetailClient({
             brand={vehicle.brand}
             model={vehicle.model}
           />
+        )}
+
+        {/* LBC ads panel — right column, after estimation */}
+        {!vehicle.sale_price && (
+          <LBCAdsPanel vehicleId={vehicle.id} />
         )}
 
         {/* Sale simulator — only for unsold vehicles */}
