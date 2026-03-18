@@ -33,6 +33,8 @@ import {
   RefreshCw,
   ChevronDown,
   CarFront,
+  MapPin,
+  Save,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -1689,11 +1691,33 @@ function MarketValuationCard({
             lbcSearchUrl={lbcSearchUrl}
             loading={loading}
             onRefresh={fetchValuation}
+            vehicleId={vehicleId}
           />
         )}
       </CardContent>
     </Card>
   );
+}
+
+// ── Haversine distance (km) ─────────────────────────────────
+
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function computeStats(prices: number[]) {
+  if (prices.length === 0) return { median: 0, p25: 0, p75: 0, min: 0, max: 0 };
+  const sorted = [...prices].sort((a, b) => a - b);
+  const median = sorted[Math.floor(sorted.length / 2)];
+  const p25 = sorted[Math.floor(sorted.length * 0.25)];
+  const p75 = sorted[Math.floor(sorted.length * 0.75)];
+  return { median, p25, p75, min: sorted[0], max: sorted[sorted.length - 1] };
 }
 
 // ── Market Valuation Content ────────────────────────────────
@@ -1704,22 +1728,78 @@ function MarketValuationContent({
   lbcSearchUrl,
   loading,
   onRefresh,
+  vehicleId,
 }: {
   valuation: MarketValuation;
   delta: number | null;
   lbcSearchUrl: string | null;
   loading: boolean;
   onRefresh: () => void;
+  vehicleId: string;
 }) {
   const [adsOpen, setAdsOpen] = useState(false);
   const [showAll, setShowAll] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  // Geo filter state
+  const [geoCity, setGeoCity] = useState("");
+  const [geoRadius, setGeoRadius] = useState(100);
+  const [geoCoords, setGeoCoords] = useState<{ lat: number; lng: number; label: string } | null>(null);
+  const [geoLoading, setGeoLoading] = useState(false);
 
   const fmtEur = (v: number) =>
     new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(v);
 
-  const sortedAds = [...valuation.ads].sort((a, b) => a.price - b.price);
+  // Compute distances if geo is active
+  const adsWithDistance = useMemo(() => {
+    return valuation.ads.map((ad) => {
+      const dist = geoCoords && ad.lat && ad.lng
+        ? Math.round(haversineKm(geoCoords.lat, geoCoords.lng, ad.lat, ad.lng))
+        : null;
+      return { ...ad, distance: dist };
+    });
+  }, [valuation.ads, geoCoords]);
+
+  // Filtered ads by geo
+  const geoFilteredAds = useMemo(() => {
+    if (!geoCoords) return adsWithDistance;
+    return adsWithDistance.filter((ad) => ad.distance !== null && ad.distance <= geoRadius);
+  }, [adsWithDistance, geoCoords, geoRadius]);
+
+  // Local stats
+  const localStats = useMemo(() => {
+    if (!geoCoords || geoFilteredAds.length === 0) return null;
+    return computeStats(geoFilteredAds.map((a) => a.price));
+  }, [geoCoords, geoFilteredAds]);
+
+  const sortedAds = [...(geoCoords ? geoFilteredAds : adsWithDistance)].sort((a, b) => a.price - b.price);
   const visibleAds = showAll ? sortedAds : sortedAds.slice(0, 20);
   const hasMore = sortedAds.length > 20 && !showAll;
+
+  async function handleGeoFilter() {
+    if (!geoCity.trim()) return;
+    setGeoLoading(true);
+    try {
+      const res = await fetch(`https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(geoCity)}&limit=1`);
+      const data = await res.json();
+      if (data.features?.[0]) {
+        const [lng, lat] = data.features[0].geometry.coordinates;
+        const label = data.features[0].properties.city || data.features[0].properties.label || geoCity;
+        setGeoCoords({ lat, lng, label });
+        setShowAll(false);
+      }
+    } catch {
+      // silently fail
+    }
+    setGeoLoading(false);
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    // TODO: call saveValuation(vehicleId, valuation) when neptune creates it
+    await new Promise((r) => setTimeout(r, 500)); // stub
+    setSaving(false);
+  }
 
   return (
     <>
@@ -1732,6 +1812,22 @@ function MarketValuationContent({
           {fmtEur(valuation.medianPrice)}
         </p>
       </div>
+
+      {/* Comparison: national vs local */}
+      {localStats && geoCoords && (
+        <div className="grid grid-cols-2 gap-2 text-center">
+          <div className="rounded-lg bg-muted/30 px-2 py-2">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">France</p>
+            <p className="text-[15px] font-mono font-bold tabular-nums">{fmtEur(valuation.medianPrice)}</p>
+            <p className="text-[10px] font-medium text-muted-foreground">{valuation.totalAds} ann.</p>
+          </div>
+          <div className="rounded-lg bg-brand/5 border border-brand/20 px-2 py-2">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-brand">{geoCoords.label} {geoRadius}km</p>
+            <p className="text-[15px] font-mono font-bold tabular-nums">{fmtEur(localStats.median)}</p>
+            <p className="text-[10px] font-medium text-muted-foreground">{geoFilteredAds.length} ann.</p>
+          </div>
+        </div>
+      )}
 
       {/* P25 — P75 fourchette */}
       <div className="flex items-center justify-between text-[13px] font-semibold">
@@ -1755,14 +1851,9 @@ function MarketValuationContent({
           )}
         </span>
         {lbcSearchUrl && (
-          <a
-            href={lbcSearchUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-[13px] font-semibold text-brand hover:text-brand/80 transition-colors"
-          >
-            Voir sur LBC
-            <ExternalLink className="size-3" />
+          <a href={lbcSearchUrl} target="_blank" rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-[13px] font-semibold text-brand hover:text-brand/80 transition-colors">
+            Voir sur LBC <ExternalLink className="size-3" />
           </a>
         )}
       </div>
@@ -1770,9 +1861,7 @@ function MarketValuationContent({
       {/* Comparison badge */}
       {delta !== null && (
         <div className={`rounded-lg px-3 py-2 text-[13px] font-semibold ${
-          delta >= 0
-            ? "bg-positive/10 text-positive"
-            : "bg-destructive/10 text-destructive"
+          delta >= 0 ? "bg-positive/10 text-positive" : "bg-destructive/10 text-destructive"
         }`}>
           {delta >= 0
             ? `Au-dessus du marché (+${formatPrice(delta)})`
@@ -1780,17 +1869,58 @@ function MarketValuationContent({
         </div>
       )}
 
-      {/* Refresh button */}
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={onRefresh}
-        disabled={loading}
-        className="w-full gap-1.5 text-[12px]"
-      >
-        <RefreshCw className={`size-3 ${loading ? "animate-spin" : ""}`} />
-        Actualiser la cote
-      </Button>
+      {/* Geo filter section */}
+      <div className="border-t border-border pt-3 space-y-2">
+        <div className="flex items-center gap-1.5 text-[13px] font-semibold">
+          <MapPin className="size-3.5 text-brand" />
+          Cote locale
+        </div>
+        <div className="flex gap-2">
+          <Input
+            type="text"
+            placeholder="Ville ou code postal"
+            value={geoCity}
+            onChange={(e) => setGeoCity(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleGeoFilter()}
+            className="h-8 text-[12px] flex-1"
+          />
+          <select
+            value={geoRadius}
+            onChange={(e) => { setGeoRadius(Number(e.target.value)); if (geoCoords) setShowAll(false); }}
+            className="h-8 rounded-[8px] border border-border bg-white px-2 text-[12px] font-medium"
+          >
+            <option value={25}>25 km</option>
+            <option value={50}>50 km</option>
+            <option value={100}>100 km</option>
+            <option value={200}>200 km</option>
+          </select>
+        </div>
+        <div className="flex gap-2">
+          <Button size="sm" onClick={handleGeoFilter} disabled={geoLoading || !geoCity.trim()}
+            className="h-7 gap-1 text-[11px] bg-primary text-primary-foreground">
+            {geoLoading ? <RefreshCw className="size-3 animate-spin" /> : <MapPin className="size-3" />}
+            Filtrer
+          </Button>
+          {geoCoords && (
+            <Button size="sm" variant="ghost" onClick={() => { setGeoCoords(null); setShowAll(false); }}
+              className="h-7 text-[11px] text-muted-foreground">
+              Réinitialiser
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Action buttons */}
+      <div className="flex gap-2">
+        <Button variant="outline" size="sm" onClick={onRefresh} disabled={loading} className="flex-1 gap-1.5 text-[12px]">
+          <RefreshCw className={`size-3 ${loading ? "animate-spin" : ""}`} />
+          Actualiser
+        </Button>
+        <Button variant="outline" size="sm" onClick={handleSave} disabled={saving} className="flex-1 gap-1.5 text-[12px]">
+          <Save className={`size-3 ${saving ? "animate-pulse" : ""}`} />
+          {saving ? "..." : "Enregistrer"}
+        </Button>
+      </div>
 
       {/* Ads accordion */}
       {sortedAds.length > 0 && (
@@ -1799,7 +1929,7 @@ function MarketValuationContent({
             onClick={() => setAdsOpen(!adsOpen)}
             className="flex w-full items-center justify-between py-1 text-[13px] font-semibold text-foreground transition-colors hover:text-brand"
           >
-            <span>Voir les {sortedAds.length} annonces</span>
+            <span>Voir les {sortedAds.length} annonces{geoCoords ? ` (${geoCoords.label} ${geoRadius}km)` : ""}</span>
             <ChevronDown className={`size-4 text-muted-foreground transition-transform duration-200 ${adsOpen ? "rotate-180" : ""}`} />
           </button>
 
@@ -1814,7 +1944,6 @@ function MarketValuationContent({
 
                 return (
                   <div key={`${ad.id}-${idx}`} className="flex items-center gap-3 rounded-xl border border-border bg-white p-2.5 transition-colors hover:bg-muted/30">
-                    {/* Thumbnail */}
                     <div className="size-16 shrink-0 overflow-hidden rounded-lg bg-muted">
                       {ad.image ? (
                         <img src={ad.image} alt={ad.title} className="size-full object-cover" />
@@ -1824,8 +1953,6 @@ function MarketValuationContent({
                         </div>
                       )}
                     </div>
-
-                    {/* Info */}
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-[13px] font-semibold">{ad.title}</p>
                       <p className={`text-[14px] font-mono font-bold tabular-nums ${priceColor}`}>
@@ -1835,18 +1962,14 @@ function MarketValuationContent({
                         {[
                           ad.mileage ? `${new Intl.NumberFormat("fr-FR").format(ad.mileage)} km` : null,
                           ad.year ? String(ad.year) : null,
-                          ad.location ?? null,
+                          ad.distance !== null && ad.distance !== undefined
+                            ? `${ad.location ?? ""} (${ad.distance} km)`
+                            : ad.location ?? null,
                         ].filter(Boolean).join(" · ")}
                       </p>
                     </div>
-
-                    {/* Link */}
-                    <a
-                      href={ad.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="shrink-0 rounded-lg px-2.5 py-1.5 text-[12px] font-semibold text-brand transition-colors hover:bg-brand/10"
-                    >
+                    <a href={ad.url} target="_blank" rel="noopener noreferrer"
+                      className="shrink-0 rounded-lg px-2.5 py-1.5 text-[12px] font-semibold text-brand transition-colors hover:bg-brand/10">
                       Voir
                     </a>
                   </div>
