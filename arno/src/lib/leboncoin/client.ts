@@ -280,48 +280,57 @@ if args.get("yearMin") or args.get("yearMax"):
     if args.get("yearMin"): ranges["regdate"]["min"] = args["yearMin"]
     if args.get("yearMax"): ranges["regdate"]["max"] = args["yearMax"]
 
-payload = {
-    "filters": {
-        "category": {"id": "2"},
-        "enums": enums,
-        "ranges": ranges,
-        "keywords": {"text": ""},
-    },
-    "limit": 35,
-    "limit_alu": 3,
-    "offset": 0,
-    "sort_by": "time",
-    "sort_order": "desc",
-}
-
 import sys as _sys
-_sys.stderr.write(f"[PY-LBC] Payload: {json.dumps(payload)}\\n")
 
-body = client._fetch(method="POST", url="https://api.leboncoin.fr/finder/search", payload=payload)
+all_ads = []
+MAX_PAGES = 10
 
-_sys.stderr.write(f"[PY-LBC] Response total: {body.get('total', 'N/A')}, ads count: {len(body.get('ads', []))}\\n")
-_sys.stderr.write(f"[PY-LBC] Response keys: {list(body.keys())}\\n")
+for page in range(MAX_PAGES):
+    payload = {
+        "filters": {
+            "category": {"id": "2"},
+            "enums": enums,
+            "ranges": ranges,
+            "keywords": {"text": ""},
+        },
+        "limit": 35,
+        "limit_alu": 3,
+        "offset": page * 35,
+        "sort_by": "time",
+        "sort_order": "desc",
+    }
 
-ads = []
-for ad in body.get("ads", []):
-    if not ad.get("price") or not ad["price"]:
-        continue
-    attrs = {a["key"]: a.get("value") for a in ad.get("attributes", [])}
-    price = ad["price"][0] if isinstance(ad["price"], list) else ad["price"]
-    ads.append({
-        "id": ad.get("list_id", 0),
-        "title": ad.get("subject", ""),
-        "price": price,
-        "url": ad.get("url", ""),
-        "mileage": int(attrs["mileage"]) if attrs.get("mileage") else None,
-        "year": int(attrs["regdate"]) if attrs.get("regdate") else None,
-        "fuel": attrs.get("fuel"),
-        "location": ad.get("location", {}).get("city"),
-        "image": (ad.get("images", {}).get("thumb_url") or
-                  (ad.get("images", {}).get("urls", [None]) or [None])[0]),
-    })
+    _sys.stderr.write(f"[PY-LBC] Page {page+1}, offset {page*35}\\n")
+    body = client._fetch(method="POST", url="https://api.leboncoin.fr/finder/search", payload=payload)
+    page_ads = body.get("ads", [])
+    _sys.stderr.write(f"[PY-LBC] Got {len(page_ads)} ads (total reported: {body.get('total', 'N/A')})\\n")
 
-print(json.dumps(ads))
+    if not page_ads:
+        break
+
+    for ad in page_ads:
+        if not ad.get("price") or not ad["price"]:
+            continue
+        attrs = {a["key"]: a.get("value") for a in ad.get("attributes", [])}
+        price = ad["price"][0] if isinstance(ad["price"], list) else ad["price"]
+        all_ads.append({
+            "id": ad.get("list_id", 0),
+            "title": ad.get("subject", ""),
+            "price": price,
+            "url": ad.get("url", ""),
+            "mileage": int(attrs["mileage"]) if attrs.get("mileage") else None,
+            "year": int(attrs["regdate"]) if attrs.get("regdate") else None,
+            "fuel": attrs.get("fuel"),
+            "location": ad.get("location", {}).get("city"),
+            "image": (ad.get("images", {}).get("thumb_url") or
+                      (ad.get("images", {}).get("urls", [None]) or [None])[0]),
+        })
+
+    if len(page_ads) < 35:
+        break
+
+_sys.stderr.write(f"[PY-LBC] Total collected: {len(all_ads)} ads across {page+1} pages\\n")
+print(json.dumps(all_ads))
 `;
 
 /**

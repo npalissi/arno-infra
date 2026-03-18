@@ -32,7 +32,7 @@ import {
   AlertTriangle,
   RefreshCw,
   ChevronDown,
-  Car,
+  CarFront,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -1820,7 +1820,7 @@ function MarketValuationContent({
                         <img src={ad.image} alt={ad.title} className="size-full object-cover" />
                       ) : (
                         <div className="flex size-full items-center justify-center">
-                          <Car className="size-6 text-muted-foreground/20" strokeWidth={1} />
+                          <CarFront className="size-6 text-muted-foreground/20" strokeWidth={1} />
                         </div>
                       )}
                     </div>

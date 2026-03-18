@@ -17,7 +17,7 @@ export async function getVehicleValuation(
 
   const { data: vehicle, error } = await supabase
     .from('vehicles')
-    .select('brand, model, year, mileage, fuel_type, gearbox')
+    .select('brand, model, year, mileage, fuel_type, gearbox, purchase_price')
     .eq('id', vehicleId)
     .single() as unknown as {
     data: {
@@ -27,6 +27,7 @@ export async function getVehicleValuation(
       mileage: number;
       fuel_type: string;
       gearbox: string;
+      purchase_price: number;
     } | null;
     error: { message: string } | null;
   };
@@ -41,16 +42,19 @@ export async function getVehicleValuation(
   console.log("[LBC ACTION] getVehicleValuation pour:", vehicle.brand, vehicle.model, "→ model normalise:", model, "| fuel:", vehicle.fuel_type, "→", fuel, "| gearbox:", vehicle.gearbox, "→", gearbox);
 
   try {
-    const valuation = await getMarketValuation({
-      brand: vehicle.brand,
-      model,
-      yearMin: vehicle.year - 1,
-      yearMax: vehicle.year + 1,
-      mileageMin: Math.max(0, vehicle.mileage - 20000),
-      mileageMax: vehicle.mileage + 20000,
-      fuel,
-      gearbox,
-    });
+    const valuation = await getMarketValuation(
+      {
+        brand: vehicle.brand,
+        model,
+        yearMin: vehicle.year - 1,
+        yearMax: vehicle.year + 1,
+        mileageMin: Math.max(0, vehicle.mileage - 20000),
+        mileageMax: vehicle.mileage + 20000,
+        fuel,
+        gearbox,
+      },
+      vehicle.purchase_price,
+    );
 
     console.log("[LBC ACTION] Resultat:", valuation.totalAds, "annonces, median:", valuation.medianPrice, "€");
     return { data: valuation, error: null };

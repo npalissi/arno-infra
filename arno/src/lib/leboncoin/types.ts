@@ -28,8 +28,12 @@ export type MarketValuation = {
   minPrice: number;
   maxPrice: number;
   avgPrice: number;
+  p25: number;
+  p75: number;
   totalAds: number;
-  ads: LeboncoinAd[]; // top 10
+  totalBeforeFilter: number;
+  totalExcluded: number;
+  ads: LeboncoinAd[]; // all filtered ads, sorted by price asc
   searchParams: LeboncoinSearchParams;
   fetchedAt: string; // ISO date
 };
