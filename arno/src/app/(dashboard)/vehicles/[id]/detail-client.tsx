@@ -45,6 +45,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { DropZone } from "@/components/shared/drop-zone";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { StatusBadge } from "@/components/shared/status-badge";
+import { useToast } from "@/components/shared/toast";
 import { PhotoGallery } from "@/components/vehicles/photo-gallery";
 import {
   formatPrice,
@@ -56,7 +57,7 @@ import { addListing, deleteListing } from "@/lib/actions/listings";
 import { createExpense, updateExpense, deleteExpense } from "@/lib/actions/expenses";
 import { updateExpenseCategories } from "@/lib/actions/settings";
 import { uploadDocument, updateDocument, deleteDocument } from "@/lib/actions/documents";
-import { getVehicleValuation } from "@/lib/actions/valuation";
+import { getVehicleValuation, saveValuation, getLastValuation } from "@/lib/actions/valuation";
 import type { MarketValuation } from "@/lib/leboncoin/types";
 import type {
   Vehicle,
@@ -1740,6 +1741,17 @@ function MarketValuationContent({
   const [adsOpen, setAdsOpen] = useState(false);
   const [showAll, setShowAll] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
+  const { success: toastSuccess, error: toastError } = useToast();
+
+  // Fetch last saved valuation on mount
+  useEffect(() => {
+    getLastValuation(vehicleId).then((result) => {
+      if (result.data?.created_at) {
+        setLastSavedAt(result.data.created_at);
+      }
+    });
+  }, [vehicleId]);
 
   // Geo filter state
   const [geoCity, setGeoCity] = useState("");
@@ -1796,8 +1808,14 @@ function MarketValuationContent({
 
   async function handleSave() {
     setSaving(true);
-    // TODO: call saveValuation(vehicleId, valuation) when neptune creates it
-    await new Promise((r) => setTimeout(r, 500)); // stub
+    const geo = geoCoords ? { lat: geoCoords.lat, lng: geoCoords.lng, radiusKm: geoRadius, label: geoCoords.label } : undefined;
+    const result = await saveValuation(vehicleId, valuation, geo);
+    if (result.error) {
+      toastError(result.error);
+    } else {
+      toastSuccess("Cote enregistrée");
+      setLastSavedAt(new Date().toISOString());
+    }
     setSaving(false);
   }
 
@@ -1921,6 +1939,13 @@ function MarketValuationContent({
           {saving ? "..." : "Enregistrer"}
         </Button>
       </div>
+
+      {/* Last saved date */}
+      {lastSavedAt && (
+        <p className="text-[11px] font-medium text-muted-foreground text-center">
+          Dernière cote : {new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(lastSavedAt))}
+        </p>
+      )}
 
       {/* Ads accordion */}
       {sortedAds.length > 0 && (
