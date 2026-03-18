@@ -19,7 +19,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/components/shared/toast";
-import { getVehicleValuation } from "@/lib/actions/valuation";
+import { getAuto1Valuation } from "@/lib/actions/valuation";
+import type { Auto1ValuationResult } from "@/lib/actions/valuation";
 import type { MarketValuation, LeboncoinAd } from "@/lib/leboncoin/types";
 
 // ── Helpers ─────────────────────────────────────────────────
@@ -48,42 +49,27 @@ function computeStats(prices: number[]) {
   };
 }
 
-// ── Types ───────────────────────────────────────────────────
-
-type Auto1VehicleInfo = {
-  brand: string;
-  model: string;
-  year: number;
-  mileage: number;
-  fuel_type: string;
-  gearbox: string;
-  price: number; // centimes
-  photo_url?: string;
-};
-
 // ── Main Component ──────────────────────────────────────────
 
 export function CoteClient() {
   const [stockNumber, setStockNumber] = useState("");
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [vehicleInfo, setVehicleInfo] = useState<Auto1VehicleInfo | null>(null);
-  const [valuation, setValuation] = useState<MarketValuation | null>(null);
+  const [result, setResult] = useState<Auto1ValuationResult | null>(null);
   const { error: toastError } = useToast();
 
   async function handleSearch() {
     if (!stockNumber.trim()) return;
     setSearching(true);
     setError(null);
-    setVehicleInfo(null);
-    setValuation(null);
+    setResult(null);
 
-    try {
-      // TODO: Replace with getAuto1Valuation(stockNumber) when neptune creates it
-      // For now, show an error since the server action doesn't exist yet
-      setError("getAuto1Valuation n'est pas encore disponible. Utilisez la page détail véhicule pour accéder à la cote LBC.");
-    } catch {
-      setError("Erreur lors de la recherche");
+    const res = await getAuto1Valuation(stockNumber.trim());
+    if (res.error) {
+      setError(res.error);
+      toastError(res.error);
+    } else if (res.data) {
+      setResult(res.data);
     }
     setSearching(false);
   }
@@ -157,7 +143,7 @@ export function CoteClient() {
       )}
 
       {/* Results — 2 columns */}
-      {vehicleInfo && valuation && (
+      {result && (
         <div className="grid gap-6 lg:grid-cols-2">
           {/* Left — Auto1 vehicle info */}
           <Card className="border-border">
@@ -165,14 +151,15 @@ export function CoteClient() {
               <CardTitle className="flex items-center gap-2 text-[16px] font-semibold tracking-tight">
                 <CarFront className="size-4 text-brand" />
                 Véhicule Auto1
+                <span className="ml-auto text-[12px] font-mono font-medium text-muted-foreground">{result.vehicle.stockNumber}</span>
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {vehicleInfo.photo_url && (
+              {result.vehicle.photos.length > 0 && (
                 <div className="overflow-hidden rounded-xl">
                   <img
-                    src={vehicleInfo.photo_url}
-                    alt={`${vehicleInfo.brand} ${vehicleInfo.model}`}
+                    src={result.vehicle.photos[0]}
+                    alt={`${result.vehicle.brand} ${result.vehicle.model}`}
                     className="w-full aspect-[16/10] object-cover"
                   />
                 </div>
@@ -180,16 +167,16 @@ export function CoteClient() {
 
               <div>
                 <h3 className="text-[18px] font-bold tracking-tight">
-                  {vehicleInfo.brand} {vehicleInfo.model}
+                  {result.vehicle.brand} {result.vehicle.model}
                 </h3>
                 <div className="mt-2 flex flex-wrap gap-2 text-[13px] font-medium text-muted-foreground">
-                  <span className="inline-flex items-center gap-1"><Calendar className="size-3.5" />{vehicleInfo.year}</span>
+                  <span className="inline-flex items-center gap-1"><Calendar className="size-3.5" />{result.vehicle.year}</span>
                   <span className="text-border">·</span>
-                  <span className="inline-flex items-center gap-1"><Gauge className="size-3.5" />{new Intl.NumberFormat("fr-FR").format(vehicleInfo.mileage)} km</span>
+                  <span className="inline-flex items-center gap-1"><Gauge className="size-3.5" />{new Intl.NumberFormat("fr-FR").format(result.vehicle.mileage)} km</span>
                   <span className="text-border">·</span>
-                  <span className="inline-flex items-center gap-1"><Fuel className="size-3.5" />{vehicleInfo.fuel_type}</span>
+                  <span className="inline-flex items-center gap-1"><Fuel className="size-3.5" />{result.vehicle.fuel_type}</span>
                   <span className="text-border">·</span>
-                  <span className="inline-flex items-center gap-1"><Cog className="size-3.5" />{vehicleInfo.gearbox}</span>
+                  <span className="inline-flex items-center gap-1"><Cog className="size-3.5" />{result.vehicle.gearbox}</span>
                 </div>
               </div>
 
@@ -198,13 +185,13 @@ export function CoteClient() {
                   Prix Auto1
                 </p>
                 <p className="text-[28px] font-mono font-bold tracking-tight tabular-nums text-foreground">
-                  {fmtEur(vehicleInfo.price / 100)}
+                  {fmtEur(result.vehicle.price / 100)}
                 </p>
               </div>
 
               {/* Comparison with LBC median */}
               {(() => {
-                const delta = vehicleInfo.price / 100 - valuation.medianPrice;
+                const delta = result.vehicle.price / 100 - result.valuation.medianPrice;
                 return (
                   <div className={`rounded-lg px-3 py-2 text-[13px] font-semibold text-center ${
                     delta <= 0 ? "bg-positive/10 text-positive" : "bg-destructive/10 text-destructive"
@@ -227,14 +214,14 @@ export function CoteClient() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <CoteLBCContent valuation={valuation} />
+              <CoteLBCContent valuation={result.valuation} />
             </CardContent>
           </Card>
         </div>
       )}
 
       {/* Empty state when no search yet */}
-      {!searching && !error && !vehicleInfo && (
+      {!searching && !error && !result && (
         <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border bg-white py-20">
           <CarFront className="size-16 text-muted-foreground/15 mb-4" strokeWidth={1} />
           <p className="text-[14px] font-semibold text-muted-foreground">
