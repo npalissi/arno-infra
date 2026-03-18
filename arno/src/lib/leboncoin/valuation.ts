@@ -15,14 +15,13 @@ export async function getMarketValuation(
 
   try {
     ads = await searchLeboncoin(params);
-  } catch (err) {
-    // Datadome 403 → fallback to Python lbc lib
-    const msg = err instanceof Error ? err.message : "";
-    if (msg.includes("403")) {
+    // If native fetch returned 0 ads, try Python (Datadome may return 200 with empty body)
+    if (ads.length === 0) {
       ads = searchLeboncoinViaPython(params);
-    } else {
-      throw err;
     }
+  } catch {
+    // Any error (403, timeout, network) → fallback to Python lbc lib
+    ads = searchLeboncoinViaPython(params);
   }
 
   // Filter out zero/null prices and sort by price asc

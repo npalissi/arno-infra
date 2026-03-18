@@ -312,10 +312,34 @@ export function searchLeboncoinViaPython(
     writeFileSync(argsPath, argsJson);
     writeFileSync(scriptPath, PYTHON_SEARCH_SCRIPT.replace("sys.argv[1]", `open("${argsPath}").read()`));
 
-    const result = execSync(`python3.11 "${scriptPath}"`, {
-      encoding: "utf-8",
-      timeout: 30000,
-    });
+    // Try multiple Python paths — Next.js server may not have /opt/homebrew/bin in PATH
+    const pythonPaths = [
+      "python3.11",
+      "/opt/homebrew/bin/python3.11",
+      "/usr/local/bin/python3.11",
+      "python3",
+      "/opt/homebrew/bin/python3",
+    ];
+
+    let result: string | undefined;
+    let lastErr: unknown;
+
+    for (const py of pythonPaths) {
+      try {
+        result = execSync(`${py} "${scriptPath}"`, {
+          encoding: "utf-8",
+          timeout: 30000,
+          env: { ...process.env, PATH: `${process.env.PATH}:/opt/homebrew/bin:/usr/local/bin` },
+        });
+        break;
+      } catch (e) {
+        lastErr = e;
+      }
+    }
+
+    if (result === undefined) {
+      throw lastErr ?? new Error("Python bridge failed — no python3.11 found");
+    }
 
     const ads: LeboncoinAd[] = JSON.parse(result.trim());
     return ads;
